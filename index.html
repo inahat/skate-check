@@ -3,366 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skate Check: Deep Analysis</title>
+    <title>Skate Check UK</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #0d0d0d;
-            color: #ffffff;
+            background-color: #050505;
+            color: #e0e0e0;
             display: flex;
             flex-direction: column;
             align-items: center;
             min-height: 100vh;
             margin: 0;
-            padding: 20px;
+            padding: 15px;
             text-align: center;
             box-sizing: border-box;
         }
 
-        /* CONTROLS */
-        .controls { width: 100%; max-width: 380px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
-        
-        select, input, button {
-            width: 100%;
-            padding: 12px;
-            border-radius: 8px;
+        /* CARD STYLE */
+        .card {
+            background: #151515;
             border: 1px solid #333;
-            background: #1a1a1a;
-            color: white;
-            font-size: 1rem;
-        }
-        .search-row { display: flex; gap: 8px; }
-        button { cursor: pointer; font-weight: bold; background: #333; }
-        button:hover { background: #444; }
-
-        /* MAIN STATUS */
-        #status-card {
-            background: #1a1a1a;
-            border-radius: 20px;
-            padding: 30px;
+            border-radius: 16px;
+            padding: 20px;
             width: 100%;
-            max-width: 340px;
-            margin-bottom: 20px;
-            border: 1px solid #333;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 380px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
         }
 
-        #status-title { font-size: 3.5rem; font-weight: 900; text-transform: uppercase; margin: 0; line-height: 1; }
-        #status-sub { font-size: 1.2rem; font-weight: 500; opacity: 0.9; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px; }
+        /* STATUS HEADER */
+        #status-header {
+            font-size: 3rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            line-height: 1;
+            margin-bottom: 5px;
+        }
+        #status-sub {
+            font-size: 1.2rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            color: #888;
+            margin-bottom: 15px;
+        }
+
+        /* EXPLANATION BOX (Hidden by default) */
+        #logic-container {
+            display: none; /* Hidden initially */
+            margin-top: 15px;
+            animation: fadeIn 0.4s;
+        }
         
-        #reason-box {
-            margin-top: 20px;
-            padding-top: 15px;
-            border-top: 1px solid #333;
-            font-size: 0.95rem;
-            color: #ccc;
-            line-height: 1.5;
+        #logic-box {
             text-align: left;
+            font-size: 0.9rem;
+            color: #bbb;
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #555;
+            line-height: 1.5;
         }
 
-        /* METRICS GRID */
-        .metrics {
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* DATA GRID */
+        .grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
-            width: 100%;
-            max-width: 340px;
-            margin-bottom: 20px;
+            margin-top: 15px;
         }
-        .metric-box { background: #1a1a1a; padding: 15px; border-radius: 12px; text-align: center; border: 1px solid #222; }
-        .m-label { font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: 1px; }
-        .m-val { font-size: 1.1rem; font-weight: 700; margin-top: 5px; }
-
-        /* FORECAST LIST */
-        .forecast-container {
-            width: 100%;
-            max-width: 340px;
-            background: #1a1a1a;
-            border-radius: 12px;
-            padding: 15px;
-            border: 1px solid #222;
+        .metric {
+            background: #222;
+            padding: 10px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
-        .f-title { text-align: left; font-size: 0.8rem; color: #888; text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;}
-        .f-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #222; font-size: 0.9rem; }
-        .f-row:last-child { border-bottom: none; }
-        .f-time { font-weight: bold; color: #fff; }
-        .f-cond { color: #aaa; }
+        .m-label { font-size: 0.7rem; color: #777; text-transform: uppercase; letter-spacing: 0.5px; }
+        .m-val { font-size: 1.1rem; font-weight: 700; margin-top: 4px; color: #fff; }
 
-        #location-header { font-size: 1.1rem; font-weight: bold; margin: 10px 0 15px; color: #888; }
+        /* CONTROLS */
+        select, button, input {
+            width: 100%;
+            max-width: 380px;
+            padding: 14px;
+            background: #222;
+            color: white;
+            border: 1px solid #444;
+            border-radius: 10px;
+            font-size: 1rem;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
         
-        /* Utility */
-        .gps-btn { margin-top: 20px; font-size: 0.8rem; text-decoration: underline; color: #666; background: none; border: none; }
-    </style>
-</head>
-<body>
-
-    <h1 style="font-size:1rem; color:#444; text-transform:uppercase;">Skate Weather Pro</h1>
-    <div id="location-header">Select Location</div>
-
-    <!-- CONTROLS -->
-    <div class="controls">
-        <select id="park-select" onchange="selectPark()">
-            <option value="" disabled selected>Select Park...</option>
-            <optgroup label="Local Spots">
-                <option value="51.6886,-0.0355">Waltham Cross (Holdbrook)</option>
-                <option value="51.6908,-0.0105">Waltham Abbey (Town Mead)</option>
-                <option value="51.6242,-0.0166">Chingford Chase Lane (Bowl)</option>
-            </optgroup>
-            <optgroup label="London Major">
-                <option value="51.4664,-0.1160">Stockwell</option>
-                <option value="51.5500,-0.1290">Cantelowes</option>
-                <option value="51.5365,-0.0392">Victoria Park</option>
-                <option value="51.5200,-0.2000">BaySixty6 (Covered)</option>
-            </optgroup>
-        </select>
-        <div class="search-row">
-            <input type="text" id="city-input" placeholder="City name..." onkeydown="if(event.key === 'Enter') searchLocation()">
-            <button onclick="searchLocation()">Go</button>
-        </div>
-    </div>
-
-    <!-- MAIN STATUS CARD -->
-    <div id="status-card">
-        <div id="status-title">--</div>
-        <div id="status-sub">Waiting for Data</div>
-        <div id="reason-box">Select a location to analyze dew history and drying conditions.</div>
-    </div>
-
-    <!-- CURRENT METRICS -->
-    <div class="metrics" id="metrics-area" style="opacity:0.3">
-        <div class="metric-box">
-            <div class="m-label">Spread</div>
-            <div class="m-val" id="val-spread">--</div>
-        </div>
-        <div class="metric-box">
-            <div class="m-label">Overnight Dew</div>
-            <div class="m-val" id="val-dewhist">--</div>
-        </div>
-        <div class="metric-box">
-            <div class="m-label">Humidity</div>
-            <div class="m-val" id="val-hum">--</div>
-        </div>
-        <div class="metric-box">
-            <div class="m-label">Wind</div>
-            <div class="m-val" id="val-wind">--</div>
-        </div>
-    </div>
-
-    <!-- 4 HOUR FORECAST -->
-    <div class="forecast-container" id="forecast-area" style="opacity:0.3">
-        <div class="f-title">Next 4 Hours</div>
-        <div id="forecast-list"></div>
-    </div>
-
-    <button class="gps-btn" onclick="getGPS()">Use Current Location</button>
-
-    <script>
-        // --- LOGIC HELPERS ---
-
-        // Returns true if code is Rain/Drizzle (WMO Codes)
-        function isRaining(code) {
-            // 51-67: Drizzle/Rain, 80-82: Showers, 95+: Thunderstorm
-            return (code >= 51 && code <= 67) || (code >= 80 && code <= 99);
+        /* Search specific */
+        .search-container {
+            display: flex;
+            gap: 5px;
+            width: 100%;
+            max-width: 380px;
+            margin-bottom: 15px;
         }
-
-        function getWMOString(code) {
-            if(code === 0) return "Clear";
-            if(code <= 3) return "Cloudy";
-            if(code <= 48) return "Fog";
-            if(code <= 57) return "Drizzle";
-            if(code <= 67) return "Rain";
-            if(code <= 77) return "Snow";
-            if(code >= 80) return "Showers";
-            return "Storm";
-        }
-
-        // --- UI FUNCTIONS ---
-
-        function selectPark() {
-            const select = document.getElementById('park-select');
-            const coords = select.value.split(',');
-            if(coords.length === 2) {
-                document.getElementById('location-header').innerText = select.options[select.selectedIndex].text;
-                fetchWeather(coords[0], coords[1]);
-            }
-        }
-
-        async function searchLocation() {
-            const input = document.getElementById('city-input').value;
-            if(!input) return;
-            document.getElementById('reason-box').innerText = "Searching...";
-            
-            const url = `https://geocoding-api.open-meteo.com/v1/search?name=${input}&count=1&language=en&format=json`;
-            try {
-                const res = await fetch(url);
-                const data = await res.json();
-                if(data.results && data.results.length > 0) {
-                    const place = data.results[0];
-                    document.getElementById('location-header').innerText = place.name;
-                    fetchWeather(place.latitude, place.longitude);
-                }
-            } catch (e) { console.error(e); }
-        }
-
-        function getGPS() {
-            if (navigator.geolocation) {
-                document.getElementById('reason-box').innerText = "Locating...";
-                navigator.geolocation.getCurrentPosition(pos => {
-                    document.getElementById('location-header').innerText = "Current Location";
-                    fetchWeather(pos.coords.latitude, pos.coords.longitude);
-                });
-            }
-        }
-
-        // --- CORE ALGORITHM ---
-
-        async function fetchWeather(lat, lon) {
-            document.getElementById('status-title').innerText = "...";
-            document.getElementById('reason-box').innerText = "Analyzing 12-hour dew history and drying energy...";
-
-            // We fetch 'hourly' to scan history and 'current' for right now
-            // forecast_days=2 ensures we cross midnight boundaries correctly
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&hourly=temperature_2m,dew_point_2m,precipitation,weather_code,wind_speed_10m,relative_humidity_2m&past_days=1&forecast_days=2`;
-
-            try {
-                const res = await fetch(url);
-                const data = await res.json();
-                analyze(data);
-            } catch (e) {
-                document.getElementById('reason-box').innerText = "Error loading weather data.";
-            }
-        }
-
-        function analyze(data) {
-            const current = data.current;
-            const hourly = data.hourly;
-            
-            // 1. Get Current Index
-            const nowISO = new Date().toISOString().slice(0, 13); // YYYY-MM-DDTHH
-            let idx = hourly.time.findIndex(t => t.startsWith(nowISO));
-            if(idx === -1) idx = hourly.time.length - 24; // Fallback
-
-            // 2. Dew Memory Logic (Scan last 12 hours)
-            let lowestSpread = 100;
-            let wasWetRecently = false;
-            let hoursSinceWet = 0;
-
-            for (let i = 0; i < 12; i++) {
-                const checkIdx = idx - i;
-                if(checkIdx < 0) continue;
-
-                const hTemp = hourly.temperature_2m[checkIdx];
-                const hDew = hourly.dew_point_2m[checkIdx];
-                const hCode = hourly.weather_code[checkIdx];
-                const hSpread = hTemp - hDew;
-
-                if (hSpread < lowestSpread) lowestSpread = hSpread;
-
-                // Did it rain or reach dew point?
-                if (isRaining(hCode) || hSpread < 0.5) {
-                    wasWetRecently = true;
-                    hoursSinceWet = i; // How many hours ago?
-                }
-            }
-
-            // 3. Current Conditions
-            const curSpread = (hourly.temperature_2m[idx] - hourly.dew_point_2m[idx]).toFixed(1);
-            const curHum = current.relative_humidity_2m;
-            const curWind = current.wind_speed_10m;
-            const curCode = current.weather_code;
-
-            // 4. LOGIC TREE
-            let status = "DRY";
-            let color = "#2ecc71"; // Green
-            let sub = "GO SKATE";
-            let reason = "Conditions are dry. No rain or dew history recently.";
-
-            // PRIORITY 1: Is it raining RIGHT NOW? (Check code and next hour forecast)
-            // Use Hourly[idx] weather code as it's often more accurate than 'current' API due to update lag
-            if (isRaining(curCode) || isRaining(hourly.weather_code[idx])) {
-                status = "WET";
-                sub = "RAINING";
-                color = "#e74c3c"; // Red
-                reason = "Active precipitation detected.";
-            }
-            // PRIORITY 2: Was it wet recently? (Dew Memory)
-            else if (wasWetRecently) {
-                // It was wet. Is it dry yet?
-                // Winter Logic: Need low humidity OR high wind to dry
-                const month = new Date().getMonth();
-                const isWinter = (month >= 10 || month <= 2);
-                
-                // If humidity is high, water doesn't evaporate
-                if (curHum > 85) {
-                    status = "WET";
-                    sub = "NO CHANCE";
-                    color = "#e74c3c";
-                    reason = `Ground was wet ${hoursSinceWet}h ago. Humidity is ${curHum}% so it cannot evaporate.`;
-                } 
-                // If it's winter and wind is low
-                else if (isWinter && curWind < 10) {
-                    status = "DAMP";
-                    sub = "STAY HOME";
-                    color = "#f39c12"; // Orange
-                    reason = `It was wet ${hoursSinceWet}h ago. In winter, you need high wind to dry the concrete. It is currently calm.`;
-                }
-                else {
-                    status = "MAYBE";
-                    sub = "CHECK IT";
-                    color = "#f39c12";
-                    reason = `It was wet ${hoursSinceWet}h ago, but humidity dropped. Might be drying spots.`;
-                }
-            }
-            // PRIORITY 3: Current Dew Risk
-            else if (curSpread < 1.5) {
-                status = "NO";
-                sub = "DEW";
-                color = "#e74c3c";
-                reason = `Current dew point spread is only ${curSpread}°C. Condensation is active.`;
-            }
-
-            // 5. UPDATE UI
-            const card = document.getElementById('status-card');
-            const title = document.getElementById('status-title');
-            const subText = document.getElementById('status-sub');
-            
-            title.innerText = status;
-            title.style.color = color;
-            card.style.borderColor = color;
-            subText.innerText = sub;
-            subText.style.color = color;
-            document.getElementById('reason-box').innerText = reason;
-
-            // Update Metrics
-            document.getElementById('metrics-area').style.opacity = 1;
-            document.getElementById('val-spread').innerText = curSpread + "°";
-            document.getElementById('val-dewhist').innerText = (lowestSpread < 1.0) ? "YES" : "NO";
-            document.getElementById('val-hum').innerText = curHum + "%";
-            document.getElementById('val-wind').innerText = curWind + "kph";
-
-            // 6. RENDER 4-HOUR FORECAST
-            const fList = document.getElementById('forecast-list');
-            fList.innerHTML = ""; // Clear
-            document.getElementById('forecast-area').style.opacity = 1;
-
-            for(let i = 1; i <= 4; i++) {
-                const fIdx = idx + i;
-                const timeStr = hourly.time[fIdx].split('T')[1];
-                const wCode = hourly.weather_code[fIdx];
-                const pop = hourly.precipitation[fIdx];
-                
-                let rowColor = "#aaa";
-                if(isRaining(wCode)) rowColor = "#e74c3c";
-
-                const row = document.createElement('div');
-                row.className = 'f-row';
-                row.innerHTML = `
-                    <span class="f-time">${timeStr}</span>
-                    <span class="f-cond" style="color:${rowColor}">${getWMOString(wCode)} (${pop}mm)</span>
-                `;
-                fList.appendChild(row);
-            }
-        }
-    </script>
-</body>
-</html>
+        input { margin-bottom: 0; }
+        .go-btn { width: auto; margin-bottom: 0; ba
