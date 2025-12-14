@@ -112,4 +112,316 @@
             margin-bottom: 15px;
         }
         input { margin-bottom: 0; }
-        .go-btn { width: auto; margin-bottom: 0; ba
+        .go-btn { width: auto; margin-bottom: 0; background: #333; cursor: pointer;}
+
+        /* WHY BUTTON */
+        #why-btn {
+            background: transparent;
+            border: 1px solid #444;
+            font-size: 0.8rem;
+            padding: 8px;
+            width: auto;
+            margin: 0 auto;
+            display: none; /* Hidden until data loads */
+            color: #888;
+            cursor: pointer;
+            border-radius: 20px;
+        }
+        #why-btn:hover { border-color: #888; color: #fff; }
+
+        /* FORECAST STRIP */
+        .forecast-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #333;
+            font-size: 0.9rem;
+        }
+        .forecast-row:last-child { border-bottom: none; }
+        .f-time { font-weight: bold; color: #fff; }
+        
+        .dim { opacity: 0.4; }
+    </style>
+</head>
+<body>
+
+    <h2 style="font-size:1rem; color:#666; margin-top:0; text-transform:uppercase; letter-spacing:2px;">UK Concrete Check</h2>
+
+    <!-- DROPDOWN -->
+    <select id="park-select" onchange="selectPark()">
+        <option value="" disabled selected>Select Park...</option>
+        <optgroup label="Your Spots">
+            <option value="51.6886,-0.0355">Waltham Cross</option>
+            <option value="51.6908,-0.0105">Waltham Abbey</option>
+            <option value="51.6242,-0.0166">Chingford (Chase Lane)</option>
+        </optgroup>
+        <optgroup label="London Major">
+            <option value="51.4664,-0.1160">Stockwell</option>
+            <option value="51.5500,-0.1290">Cantelowes</option>
+            <option value="51.5365,-0.0392">Victoria Park</option>
+            <option value="51.5072,-0.1158">Southbank</option>
+        </optgroup>
+    </select>
+
+    <!-- SEARCH -->
+    <div class="search-container">
+        <input type="text" id="city-input" placeholder="Or search UK city..." onfocus="clearDropdown()" onkeydown="if(event.key === 'Enter') searchLocation()">
+        <button class="go-btn" onclick="searchLocation()">Go</button>
+    </div>
+
+    <!-- MAIN CARD -->
+    <div class="card" id="main-card">
+        <div id="status-header">--</div>
+        <div id="status-sub">Select Location</div>
+        
+        <!-- EXPANDABLE REASONING -->
+        <button id="why-btn" onclick="toggleReason()">Why is it this status?</button>
+        
+        <div id="logic-container">
+            <div id="logic-box">Waiting for data...</div>
+        </div>
+    </div>
+
+    <!-- DATA METRICS -->
+    <div class="card dim" id="data-card">
+        <div style="font-size:0.8rem; color:#666; text-transform:uppercase; margin-bottom:10px;">Ground Physics</div>
+        <div class="grid">
+            <div class="metric">
+                <span class="m-label">Ground Temp</span>
+                <span class="m-val" id="val-ground">--</span>
+            </div>
+            <div class="metric">
+                <span class="m-label">Dew Point</span>
+                <span class="m-val" id="val-dew">--</span>
+            </div>
+            <div class="metric">
+                <span class="m-label">Humidity</span>
+                <span class="m-val" id="val-hum">--</span>
+            </div>
+            <div class="metric">
+                <span class="m-label">Drying Wind</span>
+                <span class="m-val" id="val-wind">--</span>
+            </div>
+        </div>
+        <div style="margin-top:15px; padding-top:10px; border-top:1px solid #333;" id="forecast-container">
+            <!-- Forecast rows go here -->
+        </div>
+    </div>
+
+    <button onclick="getGPS()" style="background:none; border:none; text-decoration:underline; color:#666; font-size:0.8rem;">Use My GPS</button>
+
+    <script>
+        // --- CONFIG ---
+        const SAFETY_MARGIN = 1.5; 
+        const MAX_HUMIDITY = 88; 
+
+        // --- UI LOGIC ---
+
+        function toggleReason() {
+            const container = document.getElementById('logic-container');
+            const btn = document.getElementById('why-btn');
+            
+            if (container.style.display === 'block') {
+                container.style.display = 'none';
+                btn.innerText = "Why is it this status?";
+            } else {
+                container.style.display = 'block';
+                btn.innerText = "Hide reasoning";
+            }
+        }
+
+        // 1. CLEAR SEARCH if Dropdown used
+        function selectPark() {
+            const val = document.getElementById('park-select').value;
+            // Clear the search box
+            document.getElementById('city-input').value = "";
+            
+            if(val) {
+                const [lat, lon] = val.split(',');
+                fetchData(lat, lon);
+            }
+        }
+
+        // 2. CLEAR DROPDOWN if Search used
+        function clearDropdown() {
+            document.getElementById('park-select').selectedIndex = 0;
+        }
+
+        // 3. SEARCH (UK ONLY)
+        async function searchLocation() {
+            // Ensure dropdown is reset
+            clearDropdown();
+            
+            const input = document.getElementById('city-input').value;
+            if(!input) return;
+
+            document.getElementById('status-header').innerText = "...";
+            document.getElementById('status-sub').innerText = "Searching UK...";
+            
+            // We fetch 5 results, then filter for UK in Javascript
+            const url = `https://geocoding-api.open-meteo.com/v1/search?name=${input}&count=10&language=en&format=json`;
+
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                if(data.results) {
+                    // FILTER: Look for country_code "GB" (United Kingdom)
+                    const ukLoc = data.results.find(r => r.country_code === 'GB');
+                    
+                    if (ukLoc) {
+                        document.getElementById('status-sub').innerText = ukLoc.name;
+                        fetchData(ukLoc.latitude, ukLoc.longitude);
+                    } else {
+                        alert("City not found in the UK. Please try again.");
+                        document.getElementById('status-header').innerText = "--";
+                        document.getElementById('status-sub').innerText = "Not Found";
+                    }
+                } else {
+                    alert("Location not found.");
+                }
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        function getGPS() {
+            if(navigator.geolocation) {
+                document.getElementById('city-input').value = "";
+                document.getElementById('park-select').selectedIndex = 0;
+                document.getElementById('status-sub').innerText = "Locating...";
+                navigator.geolocation.getCurrentPosition(pos => {
+                    fetchData(pos.coords.latitude, pos.coords.longitude);
+                });
+            }
+        }
+
+        // --- WEATHER LOGIC ---
+        async function fetchData(lat, lon) {
+            // Hide the "Why" box initially when loading new data
+            document.getElementById('logic-container').style.display = 'none';
+            document.getElementById('why-btn').style.display = 'none';
+            document.getElementById('why-btn').innerText = "Why is it this status?";
+            
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,soil_temperature_0cm,dew_point_2m&hourly=soil_temperature_0cm,dew_point_2m,precipitation,weather_code,relative_humidity_2m&past_days=1&forecast_days=2`;
+
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                analyze(data);
+            } catch(e) {
+                document.getElementById('status-sub').innerText = "API Error";
+            }
+        }
+
+        function analyze(data) {
+            const cur = data.current;
+            const hourly = data.hourly;
+            const nowISO = new Date().toISOString().slice(0, 13);
+            let idx = hourly.time.findIndex(t => t.startsWith(nowISO));
+            if(idx === -1) idx = hourly.time.length - 24;
+
+            // 1. EXTRACT DATA
+            const groundTemp = cur.soil_temperature_0cm;
+            const dewPoint = cur.dew_point_2m;
+            const humidity = cur.relative_humidity_2m;
+            const wind = cur.wind_speed_10m;
+            const spread = (groundTemp - dewPoint).toFixed(1);
+
+            // 2. HISTORY SCAN (12 Hours)
+            let wasWet = false;
+            let wetTime = 0;
+            
+            for(let i=1; i<=12; i++) {
+                const hIdx = idx - i;
+                if(hIdx < 0) continue;
+                const code = hourly.weather_code[hIdx];
+                const precip = hourly.precipitation[hIdx];
+                const hGround = hourly.soil_temperature_0cm[hIdx];
+                const hDew = hourly.dew_point_2m[hIdx];
+
+                // Logic: Ground colder than dew point OR rain
+                if (hGround <= (hDew + 0.5) || precip > 0.1 || code >= 50) {
+                    wasWet = true;
+                    wetTime = i;
+                }
+            }
+
+            // 3. DECISION ENGINE
+            let status = "DRY";
+            let color = "#2ecc71";
+            let sub = "GO SKATE";
+            let logic = "Ground temp is safely above dew point. No recent moisture.";
+
+            // A. Raining Now
+            if (cur.weather_code >= 50 || cur.precipitation > 0) {
+                status = "WET";
+                color = "#e74c3c";
+                sub = "RAINING";
+                logic = "It is raining right now.";
+            }
+            // B. Active Condensation
+            else if (spread < SAFETY_MARGIN) {
+                status = "WET";
+                color = "#e74c3c";
+                sub = "SWEATING";
+                logic = `<b>Active Condensation:</b><br>Ground Temp (${groundTemp}°) is too close to Dew Point (${dewPoint}°). The concrete is generating water.`;
+            }
+            // C. History Check
+            else if (wasWet) {
+                const isDryingConditions = (humidity < MAX_HUMIDITY) && (wind > 8);
+
+                if (!isDryingConditions) {
+                    status = "DAMP";
+                    color = "#f39c12"; 
+                    sub = "NO EVAPORATION";
+                    logic = `<b>Won't Dry:</b><br>It was wet ${wetTime}h ago. Current Humidity is ${humidity}% (too high) and Wind is only ${wind}kph. The water is trapped in the concrete.`;
+                } else {
+                    status = "MAYBE";
+                    color = "#f39c12";
+                    sub = "CHECK SPOT";
+                    logic = `<b>Maybe Drying:</b><br>It was wet ${wetTime}h ago. Conditions are improving (Wind: ${wind}kph), but deep bowls may still be damp.`;
+                }
+            }
+
+            // 4. UPDATE UI
+            document.getElementById('status-header').innerText = status;
+            document.getElementById('status-header').style.color = color;
+            document.getElementById('status-sub').innerText = sub;
+            document.getElementById('status-sub').style.color = color;
+            document.getElementById('main-card').style.borderColor = color;
+            
+            // Logic Box
+            document.getElementById('logic-box').innerHTML = logic;
+            document.getElementById('why-btn').style.display = "block"; // Show button
+
+            // Metrics
+            document.getElementById('data-card').classList.remove('dim');
+            document.getElementById('val-ground').innerText = groundTemp + "°";
+            document.getElementById('val-dew').innerText = dewPoint + "°";
+            document.getElementById('val-hum').innerText = humidity + "%";
+            document.getElementById('val-wind').innerText = wind + "kph";
+
+            // Forecast
+            const fCont = document.getElementById('forecast-container');
+            fCont.innerHTML = "";
+            for(let i=1; i<=3; i++) {
+                const fIdx = idx + i;
+                const time = hourly.time[fIdx].split('T')[1];
+                const code = hourly.weather_code[fIdx];
+                const prob = hourly.precipitation[fIdx];
+                
+                let desc = "Cloudy";
+                let tColor = "#aaa";
+                if(code < 3) desc = "Clear";
+                if(code >= 50) { desc = "Rain"; tColor = "#e74c3c"; }
+                
+                const row = document.createElement('div');
+                row.className = 'forecast-row';
+                row.innerHTML = `<span class="f-time">${time}</span><span style="color:${tColor}">${desc} (${prob}mm)</span>`;
+                fCont.appendChild(row);
+            }
+        }
+    </script>
+</body>
+</html>
