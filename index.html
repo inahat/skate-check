@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skate Check UK</title>
+    <title>Skate Check: Probabilistic</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -33,121 +33,57 @@
         }
 
         /* STATUS HEADER */
-        #status-header {
-            font-size: 3rem;
-            font-weight: 900;
-            text-transform: uppercase;
-            line-height: 1;
-            margin-bottom: 5px;
-        }
-        #status-sub {
-            font-size: 1.2rem;
-            font-weight: 500;
-            text-transform: uppercase;
-            color: #888;
-            margin-bottom: 15px;
-        }
+        #status-header { font-size: 3rem; font-weight: 900; text-transform: uppercase; line-height: 1; margin-bottom: 5px; }
+        #status-sub { font-size: 1.2rem; font-weight: 500; text-transform: uppercase; color: #888; margin-bottom: 5px; }
 
-        /* EXPLANATION BOX (Hidden by default) */
-        #logic-container {
-            display: none; /* Hidden initially */
-            margin-top: 15px;
-            animation: fadeIn 0.4s;
-        }
-        
-        #logic-box {
-            text-align: left;
-            font-size: 0.9rem;
-            color: #bbb;
-            background: rgba(255,255,255,0.05);
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #555;
-            line-height: 1.5;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* DATA GRID */
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 15px;
-        }
-        .metric {
+        /* RAIN & CONFIDENCE BADGES */
+        .badge-row { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
+        .badge {
+            font-size: 0.85rem;
+            padding: 5px 10px;
+            border-radius: 6px;
             background: #222;
-            padding: 10px;
-            border-radius: 8px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            color: #ccc;
+            font-weight: 600;
         }
-        .m-label { font-size: 0.7rem; color: #777; text-transform: uppercase; letter-spacing: 0.5px; }
+        .conf-high { color: #2ecc71; border: 1px solid #2ecc71; }
+        .conf-med { color: #f39c12; border: 1px solid #f39c12; }
+        .conf-low { color: #e74c3c; border: 1px solid #e74c3c; }
+
+        /* LOGIC BOX */
+        #logic-container { display: none; margin-top: 15px; animation: fadeIn 0.4s; }
+        #logic-box {
+            text-align: left; font-size: 0.9rem; color: #bbb;
+            background: rgba(255,255,255,0.05); padding: 15px;
+            border-radius: 8px; border-left: 4px solid #555; line-height: 1.5;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* METRICS GRID */
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .metric { background: #222; padding: 10px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; }
+        .m-label { font-size: 0.7rem; color: #777; text-transform: uppercase; }
         .m-val { font-size: 1.1rem; font-weight: 700; margin-top: 4px; color: #fff; }
 
         /* CONTROLS */
-        select, button, input {
-            width: 100%;
-            max-width: 380px;
-            padding: 14px;
-            background: #222;
-            color: white;
-            border: 1px solid #444;
-            border-radius: 10px;
-            font-size: 1rem;
-            margin-bottom: 10px;
-            box-sizing: border-box;
-        }
-        
-        /* Search specific */
-        .search-container {
-            display: flex;
-            gap: 5px;
-            width: 100%;
-            max-width: 380px;
-            margin-bottom: 15px;
-        }
+        select, button, input { width: 100%; max-width: 380px; padding: 14px; background: #222; color: white; border: 1px solid #444; border-radius: 10px; font-size: 1rem; margin-bottom: 10px; box-sizing: border-box; }
+        .search-container { display: flex; gap: 5px; width: 100%; max-width: 380px; margin-bottom: 15px; }
         input { margin-bottom: 0; }
         .go-btn { width: auto; margin-bottom: 0; background: #333; cursor: pointer;}
-
-        /* WHY BUTTON */
-        #why-btn {
-            background: transparent;
-            border: 1px solid #444;
-            font-size: 0.8rem;
-            padding: 8px;
-            width: auto;
-            margin: 0 auto;
-            display: none; /* Hidden until data loads */
-            color: #888;
-            cursor: pointer;
-            border-radius: 20px;
-        }
+        
+        #why-btn { background: transparent; border: 1px solid #444; font-size: 0.8rem; padding: 8px; width: auto; margin: 0 auto; display: none; color: #888; cursor: pointer; border-radius: 20px; }
         #why-btn:hover { border-color: #888; color: #fff; }
 
-        /* FORECAST STRIP */
-        .forecast-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid #333;
-            font-size: 0.9rem;
-        }
+        /* FORECAST */
+        .forecast-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #333; font-size: 0.9rem; }
         .forecast-row:last-child { border-bottom: none; }
-        .f-time { font-weight: bold; color: #fff; }
-        
         .dim { opacity: 0.4; }
     </style>
 </head>
 <body>
 
-    <h2 style="font-size:1rem; color:#666; margin-top:0; text-transform:uppercase; letter-spacing:2px;">UK Concrete Check</h2>
+    <h2 style="font-size:1rem; color:#666; margin-top:0; text-transform:uppercase; letter-spacing:2px;">Concrete Analytics</h2>
 
-    <!-- DROPDOWN -->
     <select id="park-select" onchange="selectPark()">
         <option value="" disabled selected>Select Park...</option>
         <optgroup label="Your Spots">
@@ -163,18 +99,21 @@
         </optgroup>
     </select>
 
-    <!-- SEARCH -->
     <div class="search-container">
         <input type="text" id="city-input" placeholder="Or search UK city..." onfocus="clearDropdown()" onkeydown="if(event.key === 'Enter') searchLocation()">
         <button class="go-btn" onclick="searchLocation()">Go</button>
     </div>
 
-    <!-- MAIN CARD -->
     <div class="card" id="main-card">
         <div id="status-header">--</div>
         <div id="status-sub">Select Location</div>
         
-        <!-- EXPANDABLE REASONING -->
+        <!-- NEW BADGE ROW -->
+        <div class="badge-row">
+            <div class="badge" id="rain-badge">Last Rain: --</div>
+            <div class="badge" id="conf-badge" style="display:none;">--% Dry</div>
+        </div>
+
         <button id="why-btn" onclick="toggleReason()">Why is it this status?</button>
         
         <div id="logic-container">
@@ -182,9 +121,8 @@
         </div>
     </div>
 
-    <!-- DATA METRICS -->
     <div class="card dim" id="data-card">
-        <div style="font-size:0.8rem; color:#666; text-transform:uppercase; margin-bottom:10px;">Ground Physics</div>
+        <div style="font-size:0.8rem; color:#666; text-transform:uppercase; margin-bottom:10px;">Physics Data</div>
         <div class="grid">
             <div class="metric">
                 <span class="m-label">Ground Temp</span>
@@ -203,86 +141,86 @@
                 <span class="m-val" id="val-wind">--</span>
             </div>
         </div>
-        <div style="margin-top:15px; padding-top:10px; border-top:1px solid #333;" id="forecast-container">
-            <!-- Forecast rows go here -->
-        </div>
+        <div style="margin-top:15px; padding-top:10px; border-top:1px solid #333;" id="forecast-container"></div>
     </div>
 
     <button onclick="getGPS()" style="background:none; border:none; text-decoration:underline; color:#666; font-size:0.8rem;">Use My GPS</button>
 
     <script>
-        // --- CONFIG ---
-        const SAFETY_MARGIN = 1.5; 
-        const MAX_HUMIDITY = 88; 
+        // --- PROBABILISTIC LOGIC ---
 
-        // --- UI LOGIC ---
+        function calculateConfidence(hoursSinceRain, wind, humidity, isDay) {
+            let score = 0;
+            
+            // 1. Time Factor (The base score)
+            // 1h = 10pts, 5h = 50pts, 10h = 100pts
+            score += (hoursSinceRain * 10);
+
+            // 2. Wind Bonus (The "Blow Dryer" effect)
+            if(wind > 15) score += 20;
+            else if(wind > 10) score += 10;
+
+            // 3. Humidity Penalty (The "Wet Blanket" effect)
+            if(humidity > 90) score -= 40; // Heavy penalty
+            else if(humidity > 80) score -= 20;
+
+            // 4. Sun Bonus
+            if(isDay) score += 10;
+
+            // Clamp result between 5% and 95%
+            if(score > 95) score = 95;
+            if(score < 5) score = 5;
+
+            return score;
+        }
+
+        // --- UI FUNCTIONS ---
 
         function toggleReason() {
-            const container = document.getElementById('logic-container');
+            const el = document.getElementById('logic-container');
             const btn = document.getElementById('why-btn');
-            
-            if (container.style.display === 'block') {
-                container.style.display = 'none';
+            if (el.style.display === 'block') {
+                el.style.display = 'none';
                 btn.innerText = "Why is it this status?";
             } else {
-                container.style.display = 'block';
+                el.style.display = 'block';
                 btn.innerText = "Hide reasoning";
             }
         }
 
-        // 1. CLEAR SEARCH if Dropdown used
         function selectPark() {
             const val = document.getElementById('park-select').value;
-            // Clear the search box
             document.getElementById('city-input').value = "";
-            
             if(val) {
                 const [lat, lon] = val.split(',');
                 fetchData(lat, lon);
             }
         }
 
-        // 2. CLEAR DROPDOWN if Search used
-        function clearDropdown() {
-            document.getElementById('park-select').selectedIndex = 0;
-        }
+        function clearDropdown() { document.getElementById('park-select').selectedIndex = 0; }
 
-        // 3. SEARCH (UK ONLY)
         async function searchLocation() {
-            // Ensure dropdown is reset
             clearDropdown();
-            
             const input = document.getElementById('city-input').value;
             if(!input) return;
-
             document.getElementById('status-header').innerText = "...";
             document.getElementById('status-sub').innerText = "Searching UK...";
             
-            // We fetch 5 results, then filter for UK in Javascript
-            const url = `https://geocoding-api.open-meteo.com/v1/search?name=${input}&count=10&language=en&format=json`;
-
+            const url = `https://geocoding-api.open-meteo.com/v1/search?name=${input}&count=5&language=en&format=json`;
             try {
                 const res = await fetch(url);
                 const data = await res.json();
-                
                 if(data.results) {
-                    // FILTER: Look for country_code "GB" (United Kingdom)
                     const ukLoc = data.results.find(r => r.country_code === 'GB');
-                    
                     if (ukLoc) {
                         document.getElementById('status-sub').innerText = ukLoc.name;
                         fetchData(ukLoc.latitude, ukLoc.longitude);
                     } else {
-                        alert("City not found in the UK. Please try again.");
+                        alert("City not found in UK.");
                         document.getElementById('status-header').innerText = "--";
-                        document.getElementById('status-sub').innerText = "Not Found";
                     }
-                } else {
-                    alert("Location not found.");
                 }
-            } catch(e) {
-                console.error(e);
-            }
+            } catch(e) { console.error(e); }
         }
 
         function getGPS() {
@@ -290,20 +228,18 @@
                 document.getElementById('city-input').value = "";
                 document.getElementById('park-select').selectedIndex = 0;
                 document.getElementById('status-sub').innerText = "Locating...";
-                navigator.geolocation.getCurrentPosition(pos => {
-                    fetchData(pos.coords.latitude, pos.coords.longitude);
-                });
+                navigator.geolocation.getCurrentPosition(pos => fetchData(pos.coords.latitude, pos.coords.longitude));
             }
         }
 
-        // --- WEATHER LOGIC ---
+        // --- CORE LOGIC ---
+
         async function fetchData(lat, lon) {
-            // Hide the "Why" box initially when loading new data
             document.getElementById('logic-container').style.display = 'none';
             document.getElementById('why-btn').style.display = 'none';
-            document.getElementById('why-btn').innerText = "Why is it this status?";
             
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,soil_temperature_0cm,dew_point_2m&hourly=soil_temperature_0cm,dew_point_2m,precipitation,weather_code,relative_humidity_2m&past_days=1&forecast_days=2`;
+            // Note: Requesting 'is_day' for Sun logic
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,soil_temperature_0cm,dew_point_2m,is_day&hourly=soil_temperature_0cm,dew_point_2m,precipitation,weather_code,relative_humidity_2m&past_days=1&forecast_days=2`;
 
             try {
                 const res = await fetch(url);
@@ -327,73 +263,112 @@
             const humidity = cur.relative_humidity_2m;
             const wind = cur.wind_speed_10m;
             const spread = (groundTemp - dewPoint).toFixed(1);
+            const isDay = cur.is_day === 1;
 
-            // 2. HISTORY SCAN (12 Hours)
+            // 2. MORNING CHECK (The "Morning Penalty")
+            const currentHour = new Date().getHours();
+            const isMorning = (currentHour >= 4 && currentHour <= 11);
+            // If morning, we need a 3.0 degree spread to feel safe. Otherwise 1.5.
+            const safetyMargin = isMorning ? 3.0 : 1.5;
+
+            // 3. HISTORY SCAN & LAST RAIN FINDER
             let wasWet = false;
-            let wetTime = 0;
-            
-            for(let i=1; i<=12; i++) {
+            let wetTime = 0; // Hours since wetness (dew or rain)
+            let lastRainHours = -1; // -1 means no rain found in history
+
+            // Scan back 24 hours
+            for(let i=0; i<=24; i++) {
                 const hIdx = idx - i;
                 if(hIdx < 0) continue;
+                
                 const code = hourly.weather_code[hIdx];
                 const precip = hourly.precipitation[hIdx];
                 const hGround = hourly.soil_temperature_0cm[hIdx];
                 const hDew = hourly.dew_point_2m[hIdx];
 
-                // Logic: Ground colder than dew point OR rain
-                if (hGround <= (hDew + 0.5) || precip > 0.1 || code >= 50) {
-                    wasWet = true;
-                    wetTime = i;
+                // Check for Rain
+                if ((precip > 0 || code >= 50) && lastRainHours === -1) {
+                    lastRainHours = i;
+                }
+
+                // Check for Wetness (Rain OR Dew) for status logic (only look back 12h for this)
+                if (i <= 12) {
+                    // Dew Condition: Ground <= DewPoint + 0.5 buffer
+                    if (hGround <= (hDew + 0.5) || precip > 0.1 || code >= 50) {
+                        wasWet = true;
+                        wetTime = i;
+                    }
                 }
             }
 
-            // 3. DECISION ENGINE
+            // 4. DECISION ENGINE
             let status = "DRY";
             let color = "#2ecc71";
             let sub = "GO SKATE";
             let logic = "Ground temp is safely above dew point. No recent moisture.";
+            let confidence = 0;
 
-            // A. Raining Now
-            if (cur.weather_code >= 50 || cur.precipitation > 0) {
+            // A. Raining Now?
+            if (lastRainHours === 0) {
                 status = "WET";
                 color = "#e74c3c";
                 sub = "RAINING";
                 logic = "It is raining right now.";
             }
-            // B. Active Condensation
-            else if (spread < SAFETY_MARGIN) {
+            // B. Active Condensation (Sweating)
+            else if (spread < safetyMargin) {
                 status = "WET";
                 color = "#e74c3c";
-                sub = "SWEATING";
-                logic = `<b>Active Condensation:</b><br>Ground Temp (${groundTemp}°) is too close to Dew Point (${dewPoint}°). The concrete is generating water.`;
+                sub = isMorning ? "MORNING DEW" : "SWEATING";
+                logic = `<b>Active Condensation:</b><br>Ground Temp (${groundTemp}°) is too close to Dew Point (${dewPoint}°).<br>Morning Requirement: Spread > ${safetyMargin}°.`;
             }
-            // C. History Check
+            // C. History Check (Was wet recently)
             else if (wasWet) {
-                const isDryingConditions = (humidity < MAX_HUMIDITY) && (wind > 8);
+                // Calculate Confidence Score
+                confidence = calculateConfidence(wetTime, wind, humidity, isDay);
 
-                if (!isDryingConditions) {
+                if (confidence < 30) {
                     status = "DAMP";
-                    color = "#f39c12"; 
-                    sub = "NO EVAPORATION";
-                    logic = `<b>Won't Dry:</b><br>It was wet ${wetTime}h ago. Current Humidity is ${humidity}% (too high) and Wind is only ${wind}kph. The water is trapped in the concrete.`;
-                } else {
+                    color = "#e74c3c";
+                    sub = "LIKELY WET";
+                    logic = `<b>Low Confidence (${confidence}%):</b><br>It was wet ${wetTime}h ago. Humidity is ${humidity}% (Too High) and Wind is low. Evaporation is unlikely.`;
+                } else if (confidence < 70) {
                     status = "MAYBE";
                     color = "#f39c12";
                     sub = "CHECK SPOT";
-                    logic = `<b>Maybe Drying:</b><br>It was wet ${wetTime}h ago. Conditions are improving (Wind: ${wind}kph), but deep bowls may still be damp.`;
+                    logic = `<b>Medium Confidence (${confidence}%):</b><br>It was wet ${wetTime}h ago. Conditions are improving (Wind ${wind}km/h), but bowls might still be damp.`;
+                } else {
+                    status = "PROBABLY DRY";
+                    color = "#f39c12"; // Yellow/Orange
+                    sub = "LOOKS OK";
+                    logic = `<b>High Confidence (${confidence}%):</b><br>It was wet ${wetTime}h ago, but high wind and lower humidity are drying the concrete fast.`;
                 }
             }
 
-            // 4. UPDATE UI
+            // 5. UPDATE UI
             document.getElementById('status-header').innerText = status;
             document.getElementById('status-header').style.color = color;
             document.getElementById('status-sub').innerText = sub;
             document.getElementById('status-sub').style.color = color;
             document.getElementById('main-card').style.borderColor = color;
-            
-            // Logic Box
             document.getElementById('logic-box').innerHTML = logic;
-            document.getElementById('why-btn').style.display = "block"; // Show button
+            document.getElementById('why-btn').style.display = "block";
+
+            // Update Rain Badge
+            const rainBadge = document.getElementById('rain-badge');
+            if (lastRainHours === 0) rainBadge.innerText = "Raining Now";
+            else if (lastRainHours === -1) rainBadge.innerText = "No Rain > 24h";
+            else rainBadge.innerText = `Last Rain: ${lastRainHours}h ago`;
+
+            // Update Confidence Badge
+            const confBadge = document.getElementById('conf-badge');
+            if(status === "MAYBE" || status === "DAMP" || status === "PROBABLY DRY") {
+                confBadge.style.display = "block";
+                confBadge.innerText = `${confidence}% Dry`;
+                confBadge.className = "badge " + (confidence > 60 ? "conf-high" : (confidence > 30 ? "conf-med" : "conf-low"));
+            } else {
+                confBadge.style.display = "none";
+            }
 
             // Metrics
             document.getElementById('data-card').classList.remove('dim');
@@ -410,7 +385,6 @@
                 const time = hourly.time[fIdx].split('T')[1];
                 const code = hourly.weather_code[fIdx];
                 const prob = hourly.precipitation[fIdx];
-                
                 let desc = "Cloudy";
                 let tColor = "#aaa";
                 if(code < 3) desc = "Clear";
