@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skate Check: Probabilistic</title>
+    <title>Skate Check: Context Aware</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -36,27 +36,21 @@
         #status-header { font-size: 3rem; font-weight: 900; text-transform: uppercase; line-height: 1; margin-bottom: 5px; }
         #status-sub { font-size: 1.2rem; font-weight: 500; text-transform: uppercase; color: #888; margin-bottom: 5px; }
 
-        /* RAIN & CONFIDENCE BADGES */
-        .badge-row { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
-        .badge {
-            font-size: 0.85rem;
-            padding: 5px 10px;
-            border-radius: 6px;
-            background: #222;
-            color: #ccc;
-            font-weight: 600;
-        }
-        .conf-high { color: #2ecc71; border: 1px solid #2ecc71; }
-        .conf-med { color: #f39c12; border: 1px solid #f39c12; }
-        .conf-low { color: #e74c3c; border: 1px solid #e74c3c; }
+        /* BADGES */
+        .badge-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+        .badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; background: #222; color: #999; border: 1px solid #333; font-weight: 600; }
+        
+        .type-field { color: #f39c12; border-color: #f39c12; }   /* Orange for High Risk */
+        .type-urban { color: #3498db; border-color: #3498db; }   /* Blue for Standard */
+        .type-covered { color: #2ecc71; border-color: #2ecc71; } /* Green for Safe */
+
+        .conf-high { color: #2ecc71; border-color: #2ecc71; }
+        .conf-med { color: #f39c12; border-color: #f39c12; }
+        .conf-low { color: #e74c3c; border-color: #e74c3c; }
 
         /* LOGIC BOX */
         #logic-container { display: none; margin-top: 15px; animation: fadeIn 0.4s; }
-        #logic-box {
-            text-align: left; font-size: 0.9rem; color: #bbb;
-            background: rgba(255,255,255,0.05); padding: 15px;
-            border-radius: 8px; border-left: 4px solid #555; line-height: 1.5;
-        }
+        #logic-box { text-align: left; font-size: 0.9rem; color: #bbb; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; border-left: 4px solid #555; line-height: 1.5; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
         /* METRICS GRID */
@@ -74,7 +68,6 @@
         #why-btn { background: transparent; border: 1px solid #444; font-size: 0.8rem; padding: 8px; width: auto; margin: 0 auto; display: none; color: #888; cursor: pointer; border-radius: 20px; }
         #why-btn:hover { border-color: #888; color: #fff; }
 
-        /* FORECAST */
         .forecast-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #333; font-size: 0.9rem; }
         .forecast-row:last-child { border-bottom: none; }
         .dim { opacity: 0.4; }
@@ -82,20 +75,31 @@
 </head>
 <body>
 
-    <h2 style="font-size:1rem; color:#666; margin-top:0; text-transform:uppercase; letter-spacing:2px;">Concrete Analytics</h2>
+    <h2 style="font-size:1rem; color:#666; margin-top:0; text-transform:uppercase; letter-spacing:2px;">Context Aware Check</h2>
 
     <select id="park-select" onchange="selectPark()">
         <option value="" disabled selected>Select Park...</option>
-        <optgroup label="Your Spots">
-            <option value="51.6886,-0.0355">Waltham Cross</option>
-            <option value="51.6908,-0.0105">Waltham Abbey</option>
-            <option value="51.6242,-0.0166">Chingford (Chase Lane)</option>
+        
+        <optgroup label="Field Locations (High Dew Risk)">
+            <!-- data-type="field" applies stricter dew logic -->
+            <option value="51.6886,-0.0355" data-type="field">Waltham Cross</option>
+            <option value="51.6908,-0.0105" data-type="field">Waltham Abbey</option>
+            <option value="51.6242,-0.0166" data-type="field">Chingford (Chase Lane)</option>
+            <option value="51.4221,-0.0715" data-type="field">Crystal Palace</option>
+            <option value="51.5945,-0.0872" data-type="field">Lordship Rec</option>
         </optgroup>
-        <optgroup label="London Major">
-            <option value="51.4664,-0.1160">Stockwell</option>
-            <option value="51.5500,-0.1290">Cantelowes</option>
-            <option value="51.5365,-0.0392">Victoria Park</option>
-            <option value="51.5072,-0.1158">Southbank</option>
+
+        <optgroup label="Urban / Concrete (Standard)">
+            <option value="51.4664,-0.1160" data-type="urban">Stockwell</option>
+            <option value="51.5500,-0.1290" data-type="urban">Cantelowes</option>
+            <option value="51.5365,-0.0392" data-type="urban">Victoria Park</option>
+            <option value="51.4850,-0.1080" data-type="urban">Kennington</option>
+        </optgroup>
+
+        <optgroup label="Covered / Protected">
+            <option value="51.5200,-0.2000" data-type="covered">BaySixty6 (Covered)</option>
+            <option value="51.5072,-0.1158" data-type="covered">Southbank (Undercroft)</option>
+            <option value="51.5100,-0.2450" data-type="covered">Acton (Sheltered)</option>
         </optgroup>
     </select>
 
@@ -108,294 +112,12 @@
         <div id="status-header">--</div>
         <div id="status-sub">Select Location</div>
         
-        <!-- NEW BADGE ROW -->
         <div class="badge-row">
-            <div class="badge" id="rain-badge">Last Rain: --</div>
-            <div class="badge" id="conf-badge" style="display:none;">--% Dry</div>
+            <div class="badge" id="type-badge" style="display:none">--</div>
+            <div class="badge" id="rain-badge">--</div>
+            <div class="badge" id="conf-badge" style="display:none;">--%</div>
         </div>
 
         <button id="why-btn" onclick="toggleReason()">Why is it this status?</button>
         
-        <div id="logic-container">
-            <div id="logic-box">Waiting for data...</div>
-        </div>
-    </div>
-
-    <div class="card dim" id="data-card">
-        <div style="font-size:0.8rem; color:#666; text-transform:uppercase; margin-bottom:10px;">Physics Data</div>
-        <div class="grid">
-            <div class="metric">
-                <span class="m-label">Ground Temp</span>
-                <span class="m-val" id="val-ground">--</span>
-            </div>
-            <div class="metric">
-                <span class="m-label">Dew Point</span>
-                <span class="m-val" id="val-dew">--</span>
-            </div>
-            <div class="metric">
-                <span class="m-label">Humidity</span>
-                <span class="m-val" id="val-hum">--</span>
-            </div>
-            <div class="metric">
-                <span class="m-label">Drying Wind</span>
-                <span class="m-val" id="val-wind">--</span>
-            </div>
-        </div>
-        <div style="margin-top:15px; padding-top:10px; border-top:1px solid #333;" id="forecast-container"></div>
-    </div>
-
-    <button onclick="getGPS()" style="background:none; border:none; text-decoration:underline; color:#666; font-size:0.8rem;">Use My GPS</button>
-
-    <script>
-        // --- PROBABILISTIC LOGIC ---
-
-        function calculateConfidence(hoursSinceRain, wind, humidity, isDay) {
-            let score = 0;
-            
-            // 1. Time Factor (The base score)
-            // 1h = 10pts, 5h = 50pts, 10h = 100pts
-            score += (hoursSinceRain * 10);
-
-            // 2. Wind Bonus (The "Blow Dryer" effect)
-            if(wind > 15) score += 20;
-            else if(wind > 10) score += 10;
-
-            // 3. Humidity Penalty (The "Wet Blanket" effect)
-            if(humidity > 90) score -= 40; // Heavy penalty
-            else if(humidity > 80) score -= 20;
-
-            // 4. Sun Bonus
-            if(isDay) score += 10;
-
-            // Clamp result between 5% and 95%
-            if(score > 95) score = 95;
-            if(score < 5) score = 5;
-
-            return score;
-        }
-
-        // --- UI FUNCTIONS ---
-
-        function toggleReason() {
-            const el = document.getElementById('logic-container');
-            const btn = document.getElementById('why-btn');
-            if (el.style.display === 'block') {
-                el.style.display = 'none';
-                btn.innerText = "Why is it this status?";
-            } else {
-                el.style.display = 'block';
-                btn.innerText = "Hide reasoning";
-            }
-        }
-
-        function selectPark() {
-            const val = document.getElementById('park-select').value;
-            document.getElementById('city-input').value = "";
-            if(val) {
-                const [lat, lon] = val.split(',');
-                fetchData(lat, lon);
-            }
-        }
-
-        function clearDropdown() { document.getElementById('park-select').selectedIndex = 0; }
-
-        async function searchLocation() {
-            clearDropdown();
-            const input = document.getElementById('city-input').value;
-            if(!input) return;
-            document.getElementById('status-header').innerText = "...";
-            document.getElementById('status-sub').innerText = "Searching UK...";
-            
-            const url = `https://geocoding-api.open-meteo.com/v1/search?name=${input}&count=5&language=en&format=json`;
-            try {
-                const res = await fetch(url);
-                const data = await res.json();
-                if(data.results) {
-                    const ukLoc = data.results.find(r => r.country_code === 'GB');
-                    if (ukLoc) {
-                        document.getElementById('status-sub').innerText = ukLoc.name;
-                        fetchData(ukLoc.latitude, ukLoc.longitude);
-                    } else {
-                        alert("City not found in UK.");
-                        document.getElementById('status-header').innerText = "--";
-                    }
-                }
-            } catch(e) { console.error(e); }
-        }
-
-        function getGPS() {
-            if(navigator.geolocation) {
-                document.getElementById('city-input').value = "";
-                document.getElementById('park-select').selectedIndex = 0;
-                document.getElementById('status-sub').innerText = "Locating...";
-                navigator.geolocation.getCurrentPosition(pos => fetchData(pos.coords.latitude, pos.coords.longitude));
-            }
-        }
-
-        // --- CORE LOGIC ---
-
-        async function fetchData(lat, lon) {
-            document.getElementById('logic-container').style.display = 'none';
-            document.getElementById('why-btn').style.display = 'none';
-            
-            // Note: Requesting 'is_day' for Sun logic
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,soil_temperature_0cm,dew_point_2m,is_day&hourly=soil_temperature_0cm,dew_point_2m,precipitation,weather_code,relative_humidity_2m&past_days=1&forecast_days=2`;
-
-            try {
-                const res = await fetch(url);
-                const data = await res.json();
-                analyze(data);
-            } catch(e) {
-                document.getElementById('status-sub').innerText = "API Error";
-            }
-        }
-
-        function analyze(data) {
-            const cur = data.current;
-            const hourly = data.hourly;
-            const nowISO = new Date().toISOString().slice(0, 13);
-            let idx = hourly.time.findIndex(t => t.startsWith(nowISO));
-            if(idx === -1) idx = hourly.time.length - 24;
-
-            // 1. EXTRACT DATA
-            const groundTemp = cur.soil_temperature_0cm;
-            const dewPoint = cur.dew_point_2m;
-            const humidity = cur.relative_humidity_2m;
-            const wind = cur.wind_speed_10m;
-            const spread = (groundTemp - dewPoint).toFixed(1);
-            const isDay = cur.is_day === 1;
-
-            // 2. MORNING CHECK (The "Morning Penalty")
-            const currentHour = new Date().getHours();
-            const isMorning = (currentHour >= 4 && currentHour <= 11);
-            // If morning, we need a 3.0 degree spread to feel safe. Otherwise 1.5.
-            const safetyMargin = isMorning ? 3.0 : 1.5;
-
-            // 3. HISTORY SCAN & LAST RAIN FINDER
-            let wasWet = false;
-            let wetTime = 0; // Hours since wetness (dew or rain)
-            let lastRainHours = -1; // -1 means no rain found in history
-
-            // Scan back 24 hours
-            for(let i=0; i<=24; i++) {
-                const hIdx = idx - i;
-                if(hIdx < 0) continue;
-                
-                const code = hourly.weather_code[hIdx];
-                const precip = hourly.precipitation[hIdx];
-                const hGround = hourly.soil_temperature_0cm[hIdx];
-                const hDew = hourly.dew_point_2m[hIdx];
-
-                // Check for Rain
-                if ((precip > 0 || code >= 50) && lastRainHours === -1) {
-                    lastRainHours = i;
-                }
-
-                // Check for Wetness (Rain OR Dew) for status logic (only look back 12h for this)
-                if (i <= 12) {
-                    // Dew Condition: Ground <= DewPoint + 0.5 buffer
-                    if (hGround <= (hDew + 0.5) || precip > 0.1 || code >= 50) {
-                        wasWet = true;
-                        wetTime = i;
-                    }
-                }
-            }
-
-            // 4. DECISION ENGINE
-            let status = "DRY";
-            let color = "#2ecc71";
-            let sub = "GO SKATE";
-            let logic = "Ground temp is safely above dew point. No recent moisture.";
-            let confidence = 0;
-
-            // A. Raining Now?
-            if (lastRainHours === 0) {
-                status = "WET";
-                color = "#e74c3c";
-                sub = "RAINING";
-                logic = "It is raining right now.";
-            }
-            // B. Active Condensation (Sweating)
-            else if (spread < safetyMargin) {
-                status = "WET";
-                color = "#e74c3c";
-                sub = isMorning ? "MORNING DEW" : "SWEATING";
-                logic = `<b>Active Condensation:</b><br>Ground Temp (${groundTemp}°) is too close to Dew Point (${dewPoint}°).<br>Morning Requirement: Spread > ${safetyMargin}°.`;
-            }
-            // C. History Check (Was wet recently)
-            else if (wasWet) {
-                // Calculate Confidence Score
-                confidence = calculateConfidence(wetTime, wind, humidity, isDay);
-
-                if (confidence < 30) {
-                    status = "DAMP";
-                    color = "#e74c3c";
-                    sub = "LIKELY WET";
-                    logic = `<b>Low Confidence (${confidence}%):</b><br>It was wet ${wetTime}h ago. Humidity is ${humidity}% (Too High) and Wind is low. Evaporation is unlikely.`;
-                } else if (confidence < 70) {
-                    status = "MAYBE";
-                    color = "#f39c12";
-                    sub = "CHECK SPOT";
-                    logic = `<b>Medium Confidence (${confidence}%):</b><br>It was wet ${wetTime}h ago. Conditions are improving (Wind ${wind}km/h), but bowls might still be damp.`;
-                } else {
-                    status = "PROBABLY DRY";
-                    color = "#f39c12"; // Yellow/Orange
-                    sub = "LOOKS OK";
-                    logic = `<b>High Confidence (${confidence}%):</b><br>It was wet ${wetTime}h ago, but high wind and lower humidity are drying the concrete fast.`;
-                }
-            }
-
-            // 5. UPDATE UI
-            document.getElementById('status-header').innerText = status;
-            document.getElementById('status-header').style.color = color;
-            document.getElementById('status-sub').innerText = sub;
-            document.getElementById('status-sub').style.color = color;
-            document.getElementById('main-card').style.borderColor = color;
-            document.getElementById('logic-box').innerHTML = logic;
-            document.getElementById('why-btn').style.display = "block";
-
-            // Update Rain Badge
-            const rainBadge = document.getElementById('rain-badge');
-            if (lastRainHours === 0) rainBadge.innerText = "Raining Now";
-            else if (lastRainHours === -1) rainBadge.innerText = "No Rain > 24h";
-            else rainBadge.innerText = `Last Rain: ${lastRainHours}h ago`;
-
-            // Update Confidence Badge
-            const confBadge = document.getElementById('conf-badge');
-            if(status === "MAYBE" || status === "DAMP" || status === "PROBABLY DRY") {
-                confBadge.style.display = "block";
-                confBadge.innerText = `${confidence}% Dry`;
-                confBadge.className = "badge " + (confidence > 60 ? "conf-high" : (confidence > 30 ? "conf-med" : "conf-low"));
-            } else {
-                confBadge.style.display = "none";
-            }
-
-            // Metrics
-            document.getElementById('data-card').classList.remove('dim');
-            document.getElementById('val-ground').innerText = groundTemp + "°";
-            document.getElementById('val-dew').innerText = dewPoint + "°";
-            document.getElementById('val-hum').innerText = humidity + "%";
-            document.getElementById('val-wind').innerText = wind + "kph";
-
-            // Forecast
-            const fCont = document.getElementById('forecast-container');
-            fCont.innerHTML = "";
-            for(let i=1; i<=3; i++) {
-                const fIdx = idx + i;
-                const time = hourly.time[fIdx].split('T')[1];
-                const code = hourly.weather_code[fIdx];
-                const prob = hourly.precipitation[fIdx];
-                let desc = "Cloudy";
-                let tColor = "#aaa";
-                if(code < 3) desc = "Clear";
-                if(code >= 50) { desc = "Rain"; tColor = "#e74c3c"; }
-                
-                const row = document.createElement('div');
-                row.className = 'forecast-row';
-                row.innerHTML = `<span class="f-time">${time}</span><span style="color:${tColor}">${desc} (${prob}mm)</span>`;
-                fCont.appendChild(row);
-            }
-        }
-    </script>
-</body>
-</html>
+        <div id="logic-con
