@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skate Check: Context Aware</title>
+    <title>Skate Check: Debug</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -32,7 +32,6 @@
             transition: all 0.3s ease;
         }
 
-        /* STATUS HEADER */
         #status-header { font-size: 3rem; font-weight: 900; text-transform: uppercase; line-height: 1; margin-bottom: 5px; }
         #status-sub { font-size: 1.2rem; font-weight: 500; text-transform: uppercase; color: #888; margin-bottom: 5px; }
 
@@ -40,18 +39,16 @@
         .badge-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
         .badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; background: #222; color: #999; border: 1px solid #333; font-weight: 600; }
         
-        .type-field { color: #f39c12; border-color: #f39c12; }   /* Orange for High Risk */
-        .type-urban { color: #3498db; border-color: #3498db; }   /* Blue for Standard */
-        .type-covered { color: #2ecc71; border-color: #2ecc71; } /* Green for Safe */
-
+        .type-field { color: #f39c12; border-color: #f39c12; }
+        .type-urban { color: #3498db; border-color: #3498db; }
+        .type-covered { color: #2ecc71; border-color: #2ecc71; }
         .conf-high { color: #2ecc71; border-color: #2ecc71; }
         .conf-med { color: #f39c12; border-color: #f39c12; }
         .conf-low { color: #e74c3c; border-color: #e74c3c; }
 
         /* LOGIC BOX */
-        #logic-container { display: none; margin-top: 15px; animation: fadeIn 0.4s; }
+        #logic-container { display: none; margin-top: 15px; }
         #logic-box { text-align: left; font-size: 0.9rem; color: #bbb; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; border-left: 4px solid #555; line-height: 1.5; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
         /* METRICS GRID */
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
@@ -81,7 +78,6 @@
         <option value="" disabled selected>Select Park...</option>
         
         <optgroup label="Field Locations (High Dew Risk)">
-            <!-- data-type="field" applies stricter dew logic -->
             <option value="51.6886,-0.0355" data-type="field">Waltham Cross</option>
             <option value="51.6908,-0.0105" data-type="field">Waltham Abbey</option>
             <option value="51.6242,-0.0166" data-type="field">Chingford (Chase Lane)</option>
@@ -120,4 +116,323 @@
 
         <button id="why-btn" onclick="toggleReason()">Why is it this status?</button>
         
-        <div id="logic-con
+        <div id="logic-container">
+            <div id="logic-box">Waiting for data...</div>
+        </div>
+    </div>
+
+    <div class="card dim" id="data-card">
+        <div style="font-size:0.8rem; color:#666; text-transform:uppercase; margin-bottom:10px;">Physics Data</div>
+        <div class="grid">
+            <div class="metric">
+                <span class="m-label">Ground Temp</span>
+                <span class="m-val" id="val-ground">--</span>
+            </div>
+            <div class="metric">
+                <span class="m-label">Dew Point</span>
+                <span class="m-val" id="val-dew">--</span>
+            </div>
+            <div class="metric">
+                <span class="m-label">Humidity</span>
+                <span class="m-val" id="val-hum">--</span>
+            </div>
+            <div class="metric">
+                <span class="m-label">Spread</span>
+                <span class="m-val" id="val-spread">--</span>
+            </div>
+        </div>
+        <div style="margin-top:15px; padding-top:10px; border-top:1px solid #333;" id="forecast-container"></div>
+    </div>
+
+    <button onclick="getGPS()" style="background:none; border:none; text-decoration:underline; color:#666; font-size:0.8rem;">Use My GPS</button>
+
+    <script>
+        // --- HELPERS ---
+        function getSettings(type, isMorning) {
+            let settings = { margin: 1.5, desc: "Standard" };
+            if (type === 'field') {
+                settings.margin = isMorning ? 4.0 : 2.5;
+                settings.desc = "Field (High Risk)";
+            } 
+            else if (type === 'covered') {
+                settings.margin = 0.5;
+                settings.desc = "Covered";
+            }
+            else {
+                settings.margin = isMorning ? 2.5 : 1.5;
+                settings.desc = "Urban";
+            }
+            return settings;
+        }
+
+        function toggleReason() {
+            const el = document.getElementById('logic-container');
+            const btn = document.getElementById('why-btn');
+            if (el.style.display === 'block') {
+                el.style.display = 'none';
+                btn.innerText = "Why is it this status?";
+            } else {
+                el.style.display = 'block';
+                btn.innerText = "Hide reasoning";
+            }
+        }
+
+        function selectPark() {
+            const select = document.getElementById('park-select');
+            const val = select.value;
+            let type = 'urban';
+            if (select.selectedIndex >= 0) {
+                 type = select.options[select.selectedIndex].getAttribute('data-type') || 'urban';
+            }
+            
+            document.getElementById('city-input').value = "";
+            if(val) {
+                const [lat, lon] = val.split(',');
+                fetchData(lat, lon, type);
+            }
+        }
+
+        function clearDropdown() { document.getElementById('park-select').selectedIndex = 0; }
+
+        async function searchLocation() {
+            clearDropdown();
+            const input = document.getElementById('city-input').value;
+            if(!input) return;
+            
+            document.getElementById('status-header').innerText = "...";
+            document.getElementById('status-sub').innerText = "Searching UK...";
+            
+            const url = `https://geocoding-api.open-meteo.com/v1/search?name=${input}&count=5&language=en&format=json`;
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                if(data.results) {
+                    const ukLoc = data.results.find(r => r.country_code === 'GB');
+                    if (ukLoc) {
+                        document.getElementById('status-sub').innerText = ukLoc.name;
+                        fetchData(ukLoc.latitude, ukLoc.longitude, 'urban');
+                    } else {
+                        alert("City not found in UK.");
+                        document.getElementById('status-header').innerText = "--";
+                        document.getElementById('status-sub').innerText = "Not Found";
+                    }
+                } else {
+                    document.getElementById('status-sub').innerText = "No results";
+                }
+            } catch(e) { 
+                showError(e);
+            }
+        }
+
+        function getGPS() {
+            if(navigator.geolocation) {
+                clearDropdown();
+                document.getElementById('city-input').value = "";
+                document.getElementById('status-sub').innerText = "Locating...";
+                navigator.geolocation.getCurrentPosition(
+                    pos => fetchData(pos.coords.latitude, pos.coords.longitude, 'urban'),
+                    err => { alert("GPS Denied"); document.getElementById('status-sub').innerText = "GPS Error"; }
+                );
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('status-header').innerText = "ERR";
+            document.getElementById('status-header').style.color = "red";
+            document.getElementById('status-sub').innerText = "System Error";
+            document.getElementById('logic-box').innerText = msg;
+            document.getElementById('logic-container').style.display = "block";
+            document.getElementById('why-btn').style.display = "block";
+        }
+
+        // --- CORE LOGIC ---
+
+        async function fetchData(lat, lon, parkType) {
+            document.getElementById('logic-container').style.display = 'none';
+            document.getElementById('why-btn').style.display = 'none';
+            document.getElementById('status-header').innerText = "...";
+            
+            // Added &timezone=GMT to ensure dates match up
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,soil_temperature_0cm,dew_point_2m,is_day&hourly=soil_temperature_0cm,dew_point_2m,precipitation,weather_code,relative_humidity_2m&past_days=1&forecast_days=2&timezone=GMT`;
+
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error("API Connection Failed");
+                const data = await res.json();
+                analyze(data, parkType);
+            } catch(e) {
+                showError(e.message);
+            }
+        }
+
+        function analyze(data, parkType) {
+            try {
+                const cur = data.current;
+                const hourly = data.hourly;
+                
+                // Get Current ISO Time (Rounded to Hour)
+                const now = new Date();
+                const nowISO = now.toISOString().slice(0, 13); // YYYY-MM-DDTHH (UTC)
+                
+                // Find Index
+                let idx = hourly.time.findIndex(t => t.startsWith(nowISO));
+                if(idx === -1) {
+                    // Fallback: Use manual calculation of hours from start time
+                    // (Sometimes API returns local time string which mismatches UTC ISO)
+                    // We just grab the index corresponding to "now" assuming array starts yesterday
+                    idx = 24 + now.getHours(); 
+                    if (idx >= hourly.time.length) idx = hourly.time.length - 1;
+                }
+
+                // 1. EXTRACT (With Fallbacks for Nulls)
+                let groundTemp = cur.soil_temperature_0cm;
+                if (groundTemp === null || groundTemp === undefined) groundTemp = cur.temperature_2m; // Fallback to Air Temp
+
+                const dewPoint = cur.dew_point_2m;
+                const humidity = cur.relative_humidity_2m;
+                const wind = cur.wind_speed_10m;
+                const spread = (groundTemp - dewPoint).toFixed(1);
+                const isDay = cur.is_day === 1;
+                const currentHour = now.getHours();
+                const isMorning = (currentHour >= 4 && currentHour <= 11);
+
+                // 2. SETTINGS
+                const settings = getSettings(parkType, isMorning);
+
+                // 3. HISTORY SCAN
+                let wasWet = false;
+                let wetTime = 0;
+                let lastRainHours = -1;
+
+                // Look back 24 hours
+                for(let i=0; i<=24; i++) {
+                    const hIdx = idx - i;
+                    if(hIdx < 0) continue;
+                    
+                    const code = hourly.weather_code[hIdx];
+                    const precip = hourly.precipitation[hIdx];
+                    let hGround = hourly.soil_temperature_0cm[hIdx];
+                    // Fallback in history scan too
+                    if(hGround === null) hGround = hourly.temperature_2m?.[hIdx] || 10; 
+
+                    const hDew = hourly.dew_point_2m[hIdx];
+
+                    // Rain Tracker
+                    if ((precip > 0 || code >= 50) && lastRainHours === -1) {
+                        lastRainHours = i;
+                    }
+
+                    // Wetness Tracker (last 12h)
+                    if (i <= 12) {
+                        const typePenalty = (parkType === 'field') ? 0.5 : 0;
+                        // Logic: Ground <= DewPoint + Buffer
+                        if (hGround <= (hDew + 0.5 + typePenalty) || precip > 0.1 || code >= 50) {
+                            wasWet = true;
+                            wetTime = i;
+                        }
+                    }
+                }
+
+                // 4. DECISION ENGINE
+                let status = "DRY";
+                let color = "#2ecc71";
+                let sub = "GO SKATE";
+                let logic = "Conditions are prime.";
+                let confidence = 0;
+
+                let isRainingEffective = (lastRainHours === 0);
+                if (parkType === 'covered' && wind < 20) isRainingEffective = false;
+
+                if (isRainingEffective) {
+                    status = "WET"; color = "#e74c3c"; sub = "RAINING";
+                    logic = "It is raining right now.";
+                }
+                else if (spread < settings.margin) {
+                    status = "WET"; color = "#e74c3c"; sub = "SWEATING";
+                    logic = `<b>Active Condensation:</b><br>Ground (${groundTemp}°) is too close to Dew Point (${dewPoint}°).<br>For '${settings.desc}' spots, we need a gap of ${settings.margin}°.`;
+                }
+                else if (wasWet && parkType !== 'covered') {
+                    let score = (wetTime * 10);
+                    if(wind > 15) score += 20;
+                    if(isDay) score += 10;
+                    if(humidity > 85) score -= 40;
+                    if(parkType === 'field') score -= 20;
+
+                    if(score > 95) score = 95; if(score < 5) score = 5;
+                    confidence = score;
+
+                    if (score < 40) {
+                        status = "DAMP"; color = "#e74c3c"; sub = "LIKELY WET";
+                        logic = `<b>Low Confidence (${score}%):</b><br>Park was wet ${wetTime}h ago. High humidity/grass is preventing drying.`;
+                    } else if (score < 75) {
+                        status = "MAYBE"; color = "#f39c12"; sub = "CHECK SPOT";
+                        logic = `<b>Medium Confidence (${score}%):</b><br>Drying in progress (${wetTime}h ago). Wind is ${wind}kph.`;
+                    } else {
+                        status = "PROBABLY DRY"; color = "#f39c12"; sub = "LOOKS OK";
+                        logic = `<b>High Confidence (${score}%):</b><br>It was wet, but wind/time have dried it.`;
+                    }
+                }
+                else if (parkType === 'covered') {
+                    status = "DRY"; sub = "COVERED"; logic = "Spot is covered. Rain/Dew ignored.";
+                }
+
+                // 5. UPDATE DOM
+                const head = document.getElementById('status-header');
+                head.innerText = status; head.style.color = color;
+                document.getElementById('status-sub').innerText = sub;
+                document.getElementById('status-sub').style.color = color;
+                document.getElementById('main-card').style.borderColor = color;
+                document.getElementById('logic-box').innerHTML = logic;
+                document.getElementById('why-btn').style.display = "block";
+
+                // Badges
+                const typeBadge = document.getElementById('type-badge');
+                typeBadge.style.display = "block";
+                typeBadge.innerText = settings.desc;
+                typeBadge.className = "badge type-" + (parkType === 'field' ? 'field' : (parkType === 'covered' ? 'covered' : 'urban'));
+
+                const rainBadge = document.getElementById('rain-badge');
+                rainBadge.style.display = "block";
+                if (lastRainHours === 0) rainBadge.innerText = "Raining";
+                else if (lastRainHours === -1) rainBadge.innerText = "No Rain >24h";
+                else rainBadge.innerText = `Rain ${lastRainHours}h ago`;
+
+                const confBadge = document.getElementById('conf-badge');
+                if(confidence > 0) {
+                    confBadge.style.display = "block";
+                    confBadge.innerText = `${confidence}% Dry`;
+                    confBadge.className = "badge " + (confidence > 60 ? "conf-high" : (confidence > 30 ? "conf-med" : "conf-low"));
+                } else { confBadge.style.display = "none"; }
+
+                // Metrics
+                document.getElementById('data-card').classList.remove('dim');
+                document.getElementById('val-ground').innerText = groundTemp + "°";
+                document.getElementById('val-dew').innerText = dewPoint + "°";
+                document.getElementById('val-hum').innerText = humidity + "%";
+                document.getElementById('val-spread').innerText = spread + "°";
+
+                // Forecast
+                const fCont = document.getElementById('forecast-container');
+                fCont.innerHTML = "";
+                for(let i=1; i<=3; i++) {
+                    const fIdx = idx + i;
+                    if (fIdx < hourly.time.length) {
+                        const time = hourly.time[fIdx].split('T')[1];
+                        const code = hourly.weather_code[fIdx];
+                        const prob = hourly.precipitation[fIdx];
+                        let desc = "Cloudy"; let tColor = "#aaa";
+                        if(code < 3) desc = "Clear";
+                        if(code >= 50) { desc = "Rain"; tColor = "#e74c3c"; }
+                        const row = document.createElement('div');
+                        row.className = 'forecast-row';
+                        row.innerHTML = `<span class="f-time">${time}</span><span style="color:${tColor}">${desc} (${prob}mm)</span>`;
+                        fCont.appendChild(row);
+                    }
+                }
+            } catch (err) {
+                showError("Logic Error: " + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
