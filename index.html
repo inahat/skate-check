@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skate Check: Debug</title>
+    <title>Skate Check: Predictor</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -35,6 +35,19 @@
         #status-header { font-size: 3rem; font-weight: 900; text-transform: uppercase; line-height: 1; margin-bottom: 5px; }
         #status-sub { font-size: 1.2rem; font-weight: 500; text-transform: uppercase; color: #888; margin-bottom: 5px; }
 
+        /* PREDICTION BOX */
+        #prediction-box {
+            background: rgba(46, 204, 113, 0.15);
+            border: 1px solid #2ecc71;
+            color: #2ecc71;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-weight: bold;
+            display: none; /* Hidden unless needed */
+            font-size: 0.95rem;
+        }
+
         /* BADGES */
         .badge-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
         .badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; background: #222; color: #999; border: 1px solid #333; font-weight: 600; }
@@ -42,6 +55,7 @@
         .type-field { color: #f39c12; border-color: #f39c12; }
         .type-urban { color: #3498db; border-color: #3498db; }
         .type-covered { color: #2ecc71; border-color: #2ecc71; }
+        
         .conf-high { color: #2ecc71; border-color: #2ecc71; }
         .conf-med { color: #f39c12; border-color: #f39c12; }
         .conf-low { color: #e74c3c; border-color: #e74c3c; }
@@ -72,7 +86,7 @@
 </head>
 <body>
 
-    <h2 style="font-size:1rem; color:#666; margin-top:0; text-transform:uppercase; letter-spacing:2px;">Context Aware Check</h2>
+    <h2 style="font-size:1rem; color:#666; margin-top:0; text-transform:uppercase; letter-spacing:2px;">Dry Time Predictor</h2>
 
     <select id="park-select" onchange="selectPark()">
         <option value="" disabled selected>Select Park...</option>
@@ -114,6 +128,8 @@
             <div class="badge" id="conf-badge" style="display:none;">--%</div>
         </div>
 
+        <div id="prediction-box"></div>
+
         <button id="why-btn" onclick="toggleReason()">Why is it this status?</button>
         
         <div id="logic-container">
@@ -122,23 +138,23 @@
     </div>
 
     <div class="card dim" id="data-card">
-        <div style="font-size:0.8rem; color:#666; text-transform:uppercase; margin-bottom:10px;">Physics Data</div>
+        <div style="font-size:0.8rem; color:#666; text-transform:uppercase; margin-bottom:10px;">Evaporation Metrics</div>
         <div class="grid">
             <div class="metric">
-                <span class="m-label">Ground Temp</span>
-                <span class="m-val" id="val-ground">--</span>
+                <span class="m-label">Solar Rad</span>
+                <span class="m-val" id="val-solar">--</span>
             </div>
             <div class="metric">
-                <span class="m-label">Dew Point</span>
-                <span class="m-val" id="val-dew">--</span>
+                <span class="m-label">Cloud Cover</span>
+                <span class="m-val" id="val-cloud">--</span>
             </div>
             <div class="metric">
-                <span class="m-label">Humidity</span>
-                <span class="m-val" id="val-hum">--</span>
+                <span class="m-label">Soil Wetness</span>
+                <span class="m-val" id="val-soil">--</span>
             </div>
             <div class="metric">
-                <span class="m-label">Spread</span>
-                <span class="m-val" id="val-spread">--</span>
+                <span class="m-label">Vapor Deficit</span>
+                <span class="m-val" id="val-vpd">--</span>
             </div>
         </div>
         <div style="margin-top:15px; padding-top:10px; border-top:1px solid #333;" id="forecast-container"></div>
@@ -147,18 +163,77 @@
     <button onclick="getGPS()" style="background:none; border:none; text-decoration:underline; color:#666; font-size:0.8rem;">Use My GPS</button>
 
     <script>
-        // --- HELPERS ---
+        // --- 1. PHYSICS CALCULATIONS ---
+
+        function calculateVPD(T, RH) {
+            const es = 0.6108 * Math.exp((17.27 * T) / (T + 237.3));
+            const ea = es * (RH / 100);
+            return (es - ea);
+        }
+
+        function calculateDryingScore(vpd, windKph, solarWatts, parkType) {
+            let score = vpd * (1 + (windKph * 0.15));
+            if (parkType !== 'covered') {
+                score += (solarWatts / 150); 
+            }
+            return score;
+        }
+
+        // --- 2. FORECASTING ENGINE ---
+
+        function predictDryTime(hourlyData, startIndex, parkType, currentAccumulation) {
+            const dryingThreshold = (parkType === 'field') ? 3.0 : 1.5;
+            let acc = currentAccumulation; // Carry over current progress
+            
+            // Limit loop to next 24 hours
+            for(let i = 1; i < 24; i++) {
+                const idx = startIndex + i;
+                if(idx >= hourlyData.time.length) break;
+
+                const code = hourlyData.weather_code[idx];
+                const precip = hourlyData.precipitation[idx];
+                const ground = hourlyData.soil_temperature_0cm[idx] || hourlyData.temperature_2m[idx];
+                const dew = hourlyData.dew_point_2m[idx];
+                const temp = hourlyData.temperature_2m[idx];
+                const hum = hourlyData.relative_humidity_2m[idx];
+                const wind = hourlyData.wind_speed_10m[idx];
+                const solar = hourlyData.shortwave_radiation[idx];
+
+                // 1. Is it getting wetter?
+                // Condensation Check (Sweating)
+                const margin = (new Date(hourlyData.time[idx]).getHours() >= 4 && new Date(hourlyData.time[idx]).getHours() <= 11) ? 
+                               ((parkType === 'field') ? 4.0 : 2.5) : 1.5;
+
+                // If Rain or Sweat, reset drying
+                if ((precip > 0 || code >= 50) || (ground - dew < margin)) {
+                    acc = 0; // Reset progress
+                } else {
+                    // 2. It is drying
+                    const vpd = calculateVPD(temp, hum);
+                    const hourScore = calculateDryingScore(vpd, wind, solar, parkType);
+                    acc += hourScore;
+                }
+
+                // 3. Did we hit the goal?
+                if (acc >= dryingThreshold) {
+                    // Return the time string (e.g., "14:00")
+                    return hourlyData.time[idx].split('T')[1];
+                }
+            }
+            return null; // Won't dry in next 24h
+        }
+
+        // --- 3. HELPERS ---
+
         function getSettings(type, isMorning) {
             let settings = { margin: 1.5, desc: "Standard" };
             if (type === 'field') {
                 settings.margin = isMorning ? 4.0 : 2.5;
                 settings.desc = "Field (High Risk)";
-            } 
-            else if (type === 'covered') {
+            } else if (type === 'covered') {
                 settings.margin = 0.5;
                 settings.desc = "Covered";
-            }
-            else {
+            } else {
                 settings.margin = isMorning ? 2.5 : 1.5;
                 settings.desc = "Urban";
             }
@@ -184,7 +259,6 @@
             if (select.selectedIndex >= 0) {
                  type = select.options[select.selectedIndex].getAttribute('data-type') || 'urban';
             }
-            
             document.getElementById('city-input').value = "";
             if(val) {
                 const [lat, lon] = val.split(',');
@@ -198,10 +272,8 @@
             clearDropdown();
             const input = document.getElementById('city-input').value;
             if(!input) return;
-            
             document.getElementById('status-header').innerText = "...";
             document.getElementById('status-sub').innerText = "Searching UK...";
-            
             const url = `https://geocoding-api.open-meteo.com/v1/search?name=${input}&count=5&language=en&format=json`;
             try {
                 const res = await fetch(url);
@@ -214,50 +286,41 @@
                     } else {
                         alert("City not found in UK.");
                         document.getElementById('status-header').innerText = "--";
-                        document.getElementById('status-sub').innerText = "Not Found";
                     }
-                } else {
-                    document.getElementById('status-sub').innerText = "No results";
                 }
-            } catch(e) { 
-                showError(e);
-            }
+            } catch(e) { showError(e); }
         }
 
         function getGPS() {
             if(navigator.geolocation) {
                 clearDropdown();
-                document.getElementById('city-input').value = "";
                 document.getElementById('status-sub').innerText = "Locating...";
                 navigator.geolocation.getCurrentPosition(
                     pos => fetchData(pos.coords.latitude, pos.coords.longitude, 'urban'),
-                    err => { alert("GPS Denied"); document.getElementById('status-sub').innerText = "GPS Error"; }
+                    err => showError(err.message)
                 );
             }
         }
 
         function showError(msg) {
             document.getElementById('status-header').innerText = "ERR";
-            document.getElementById('status-header').style.color = "red";
-            document.getElementById('status-sub').innerText = "System Error";
+            document.getElementById('status-sub').innerText = "Error";
             document.getElementById('logic-box').innerText = msg;
             document.getElementById('logic-container').style.display = "block";
-            document.getElementById('why-btn').style.display = "block";
         }
 
-        // --- CORE LOGIC ---
+        // --- 4. CORE LOGIC ---
 
         async function fetchData(lat, lon, parkType) {
             document.getElementById('logic-container').style.display = 'none';
             document.getElementById('why-btn').style.display = 'none';
+            document.getElementById('prediction-box').style.display = 'none'; // Reset prediction
             document.getElementById('status-header').innerText = "...";
             
-            // Added &timezone=GMT to ensure dates match up
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,soil_temperature_0cm,dew_point_2m,is_day&hourly=soil_temperature_0cm,dew_point_2m,precipitation,weather_code,relative_humidity_2m&past_days=1&forecast_days=2&timezone=GMT`;
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,soil_temperature_0cm,dew_point_2m,is_day,cloud_cover,shortwave_radiation,soil_moisture_0_to_1cm&hourly=soil_temperature_0cm,dew_point_2m,precipitation,weather_code,relative_humidity_2m,wind_speed_10m,temperature_2m,cloud_cover,shortwave_radiation&past_days=1&forecast_days=2&timezone=GMT`;
 
             try {
                 const res = await fetch(url);
-                if (!res.ok) throw new Error("API Connection Failed");
                 const data = await res.json();
                 analyze(data, parkType);
             } catch(e) {
@@ -266,171 +329,185 @@
         }
 
         function analyze(data, parkType) {
-            try {
-                const cur = data.current;
-                const hourly = data.hourly;
+            const cur = data.current;
+            const hourly = data.hourly;
+            
+            const now = new Date();
+            const nowISO = now.toISOString().slice(0, 13);
+            let idx = hourly.time.findIndex(t => t.startsWith(nowISO));
+            if(idx === -1) idx = 24 + now.getHours(); 
+
+            // EXTRACT
+            let groundTemp = cur.soil_temperature_0cm;
+            if (groundTemp === null) groundTemp = cur.temperature_2m;
+            
+            const dewPoint = cur.dew_point_2m;
+            const humidity = cur.relative_humidity_2m;
+            const wind = cur.wind_speed_10m;
+            const solar = cur.shortwave_radiation;
+            const cloud = cur.cloud_cover;
+            const soilMoist = cur.soil_moisture_0_to_1cm;
+            
+            const spread = (groundTemp - dewPoint).toFixed(1);
+            const currentHour = now.getHours();
+            const isMorning = (currentHour >= 4 && currentHour <= 11);
+
+            // CALCULATE PHYSICS
+            const vpd = calculateVPD(cur.temperature_2m, humidity);
+
+            // HISTORY SCAN
+            let wasWet = false;
+            let wetTime = 0;
+            let accumulatedDryingScore = 0;
+            let lastRainHours = -1;
+
+            for(let i=0; i<=24; i++) {
+                const hIdx = idx - i;
+                if(hIdx < 0) continue;
                 
-                // Get Current ISO Time (Rounded to Hour)
-                const now = new Date();
-                const nowISO = now.toISOString().slice(0, 13); // YYYY-MM-DDTHH (UTC)
+                const code = hourly.weather_code[hIdx];
+                const precip = hourly.precipitation[hIdx];
                 
-                // Find Index
-                let idx = hourly.time.findIndex(t => t.startsWith(nowISO));
-                if(idx === -1) {
-                    // Fallback: Use manual calculation of hours from start time
-                    // (Sometimes API returns local time string which mismatches UTC ISO)
-                    // We just grab the index corresponding to "now" assuming array starts yesterday
-                    idx = 24 + now.getHours(); 
-                    if (idx >= hourly.time.length) idx = hourly.time.length - 1;
-                }
+                if ((precip > 0 || code >= 50) && lastRainHours === -1) lastRainHours = i;
 
-                // 1. EXTRACT (With Fallbacks for Nulls)
-                let groundTemp = cur.soil_temperature_0cm;
-                if (groundTemp === null || groundTemp === undefined) groundTemp = cur.temperature_2m; // Fallback to Air Temp
-
-                const dewPoint = cur.dew_point_2m;
-                const humidity = cur.relative_humidity_2m;
-                const wind = cur.wind_speed_10m;
-                const spread = (groundTemp - dewPoint).toFixed(1);
-                const isDay = cur.is_day === 1;
-                const currentHour = now.getHours();
-                const isMorning = (currentHour >= 4 && currentHour <= 11);
-
-                // 2. SETTINGS
-                const settings = getSettings(parkType, isMorning);
-
-                // 3. HISTORY SCAN
-                let wasWet = false;
-                let wetTime = 0;
-                let lastRainHours = -1;
-
-                // Look back 24 hours
-                for(let i=0; i<=24; i++) {
-                    const hIdx = idx - i;
-                    if(hIdx < 0) continue;
+                if (i <= 12) {
+                    let hGround = hourly.soil_temperature_0cm[hIdx] || hourly.temperature_2m[hIdx];
+                    let hDew = hourly.dew_point_2m[hIdx];
+                    let hSolar = hourly.shortwave_radiation[hIdx];
+                    let hWind = hourly.wind_speed_10m[hIdx];
+                    let hVpd = calculateVPD(hourly.temperature_2m[hIdx], hourly.relative_humidity_2m[hIdx]);
                     
-                    const code = hourly.weather_code[hIdx];
-                    const precip = hourly.precipitation[hIdx];
-                    let hGround = hourly.soil_temperature_0cm[hIdx];
-                    // Fallback in history scan too
-                    if(hGround === null) hGround = hourly.temperature_2m?.[hIdx] || 10; 
-
-                    const hDew = hourly.dew_point_2m[hIdx];
-
-                    // Rain Tracker
-                    if ((precip > 0 || code >= 50) && lastRainHours === -1) {
-                        lastRainHours = i;
-                    }
-
-                    // Wetness Tracker (last 12h)
-                    if (i <= 12) {
-                        const typePenalty = (parkType === 'field') ? 0.5 : 0;
-                        // Logic: Ground <= DewPoint + Buffer
-                        if (hGround <= (hDew + 0.5 + typePenalty) || precip > 0.1 || code >= 50) {
-                            wasWet = true;
-                            wetTime = i;
-                        }
+                    const typePenalty = (parkType === 'field') ? 0.5 : 0;
+                    let radiativeCoolingPenalty = (hourly.cloud_cover[hIdx] < 15 && hourly.shortwave_radiation[hIdx] < 10) ? 1.5 : 0;
+                    
+                    if (hGround <= (hDew + 0.5 + typePenalty + radiativeCoolingPenalty) || precip > 0.1 || code >= 50) {
+                        wasWet = true;
+                        wetTime = i;
+                        accumulatedDryingScore = 0; 
+                    } else if (wasWet) {
+                        accumulatedDryingScore += calculateDryingScore(hVpd, hWind, hSolar, parkType);
                     }
                 }
+            }
 
-                // 4. DECISION ENGINE
-                let status = "DRY";
-                let color = "#2ecc71";
-                let sub = "GO SKATE";
-                let logic = "Conditions are prime.";
-                let confidence = 0;
+            // LOGIC
+            let settings = getSettings(parkType, isMorning);
+            let status = "DRY"; let color = "#2ecc71"; let sub = "GO SKATE";
+            let logic = "Physics conditions look good.";
+            let confidence = 0;
 
-                let isRainingEffective = (lastRainHours === 0);
-                if (parkType === 'covered' && wind < 20) isRainingEffective = false;
+            let isRainingEffective = (lastRainHours === 0);
+            if (parkType === 'covered' && wind < 20) isRainingEffective = false;
+            let isSoggy = (parkType === 'field' && soilMoist > 0.35); 
 
-                if (isRainingEffective) {
-                    status = "WET"; color = "#e74c3c"; sub = "RAINING";
-                    logic = "It is raining right now.";
+            if (isRainingEffective) {
+                status = "WET"; color = "#e74c3c"; sub = "RAINING"; logic = "It is raining right now.";
+            }
+            else if (spread < settings.margin) {
+                status = "WET"; color = "#e74c3c"; sub = "SWEATING";
+                logic = `<b>Active Condensation:</b><br>Ground (${groundTemp}°) is too close to Dew Point (${dewPoint}°).`;
+                if (cloud < 20 && solar < 10) logic += "<br>Clear skies are causing radiative cooling.";
+            }
+            else if (wasWet && parkType !== 'covered') {
+                let dryingThreshold = (parkType === 'field') ? 3.0 : 1.5;
+                if (isSoggy) accumulatedDryingScore *= 0.7; 
+
+                let rawConf = (accumulatedDryingScore / dryingThreshold) * 100;
+                if(rawConf > 95) rawConf = 95; if(rawConf < 5) rawConf = 5;
+                confidence = Math.round(rawConf);
+
+                if (accumulatedDryingScore < (dryingThreshold * 0.4)) {
+                    status = "DAMP"; color = "#e74c3c"; sub = "LIKELY WET";
+                    logic = `<b>Insufficient Energy:</b><br>It was wet ${wetTime}h ago.<br>Solar/Wind energy hasn't been enough to dry the concrete.`;
+                } else if (accumulatedDryingScore < dryingThreshold) {
+                    status = "MAYBE"; color = "#f39c12"; sub = "CHECK SPOT";
+                    logic = `<b>Partial Drying:</b><br>It was wet ${wetTime}h ago.<br>Evaporation Score: ${accumulatedDryingScore.toFixed(1)}.`;
+                } else {
+                    status = "PROBABLY DRY"; color = "#f39c12"; sub = "LOOKS OK";
+                    logic = `<b>High Drying Energy:</b><br>It was wet ${wetTime}h ago.`;
                 }
-                else if (spread < settings.margin) {
-                    status = "WET"; color = "#e74c3c"; sub = "SWEATING";
-                    logic = `<b>Active Condensation:</b><br>Ground (${groundTemp}°) is too close to Dew Point (${dewPoint}°).<br>For '${settings.desc}' spots, we need a gap of ${settings.margin}°.`;
+                
+                if (isSoggy && status !== "WET") logic += "<br><b>Note:</b> Soil is saturated, deep bowls may seep.";
+            }
+            else if (parkType === 'covered') {
+                status = "DRY"; sub = "COVERED"; logic = "Spot is covered.";
+            }
+
+            // --- PREDICTION LOGIC ---
+            if (status !== "DRY" && status !== "PROBABLY DRY" && parkType !== 'covered') {
+                // If it's WET/DAMP/MAYBE, let's predict when it will be DRY.
+                // If currently WET (Rain/Sweat), start acc at 0.
+                // If currently DAMP/MAYBE, start acc at accumulatedDryingScore.
+                const startAcc = (status === "WET") ? 0 : accumulatedDryingScore;
+                
+                const dryTime = predictDryTime(hourly, idx, parkType, startAcc);
+                const predBox = document.getElementById('prediction-box');
+                
+                if (dryTime) {
+                    predBox.innerHTML = `🏁 Predicted Dry: ${dryTime}`;
+                    predBox.style.display = "block";
+                    predBox.style.color = "#2ecc71";
+                    predBox.style.borderColor = "#2ecc71";
+                    predBox.style.backgroundColor = "rgba(46, 204, 113, 0.15)";
+                } else {
+                    predBox.innerHTML = "🌧️ Won't dry in next 24h";
+                    predBox.style.display = "block";
+                    predBox.style.color = "#e74c3c";
+                    predBox.style.borderColor = "#e74c3c";
+                    predBox.style.backgroundColor = "rgba(231, 76, 60, 0.15)";
                 }
-                else if (wasWet && parkType !== 'covered') {
-                    let score = (wetTime * 10);
-                    if(wind > 15) score += 20;
-                    if(isDay) score += 10;
-                    if(humidity > 85) score -= 40;
-                    if(parkType === 'field') score -= 20;
+            }
 
-                    if(score > 95) score = 95; if(score < 5) score = 5;
-                    confidence = score;
+            // RENDER
+            const head = document.getElementById('status-header');
+            head.innerText = status; head.style.color = color;
+            document.getElementById('status-sub').innerText = sub;
+            document.getElementById('status-sub').style.color = color;
+            document.getElementById('main-card').style.borderColor = color;
+            document.getElementById('logic-box').innerHTML = logic;
+            document.getElementById('why-btn').style.display = "block";
 
-                    if (score < 40) {
-                        status = "DAMP"; color = "#e74c3c"; sub = "LIKELY WET";
-                        logic = `<b>Low Confidence (${score}%):</b><br>Park was wet ${wetTime}h ago. High humidity/grass is preventing drying.`;
-                    } else if (score < 75) {
-                        status = "MAYBE"; color = "#f39c12"; sub = "CHECK SPOT";
-                        logic = `<b>Medium Confidence (${score}%):</b><br>Drying in progress (${wetTime}h ago). Wind is ${wind}kph.`;
-                    } else {
-                        status = "PROBABLY DRY"; color = "#f39c12"; sub = "LOOKS OK";
-                        logic = `<b>High Confidence (${score}%):</b><br>It was wet, but wind/time have dried it.`;
-                    }
+            document.getElementById('type-badge').style.display = "block";
+            document.getElementById('type-badge').innerText = settings.desc;
+            document.getElementById('type-badge').className = "badge type-" + (parkType === 'field' ? 'field' : (parkType === 'covered' ? 'covered' : 'urban'));
+            
+            const rainBadge = document.getElementById('rain-badge');
+            rainBadge.style.display = "block";
+            if (lastRainHours === 0) rainBadge.innerText = "Raining";
+            else if (lastRainHours === -1) rainBadge.innerText = "No Rain >24h";
+            else rainBadge.innerText = `Rain ${lastRainHours}h ago`;
+
+            const confBadge = document.getElementById('conf-badge');
+            if(confidence > 0) {
+                confBadge.style.display = "block";
+                confBadge.innerText = `${confidence}% Dry`;
+                confBadge.className = "badge " + (confidence > 60 ? "conf-high" : (confidence > 30 ? "conf-med" : "conf-low"));
+            } else { confBadge.style.display = "none"; }
+
+            // Metrics
+            document.getElementById('data-card').classList.remove('dim');
+            document.getElementById('val-solar').innerText = solar + " W";
+            document.getElementById('val-cloud').innerText = cloud + "%";
+            document.getElementById('val-soil').innerText = (soilMoist*100).toFixed(0) + "%";
+            document.getElementById('val-vpd').innerText = vpd.toFixed(2) + " kPa";
+
+            // Forecast
+            const fCont = document.getElementById('forecast-container');
+            fCont.innerHTML = "";
+            for(let i=1; i<=3; i++) {
+                const fIdx = idx + i;
+                if(fIdx < hourly.time.length) {
+                    const time = hourly.time[fIdx].split('T')[1];
+                    const code = hourly.weather_code[fIdx];
+                    const prob = hourly.precipitation[fIdx];
+                    let desc = "Cloudy"; let tColor = "#aaa";
+                    if(code < 3) desc = "Clear";
+                    if(code >= 50) { desc = "Rain"; tColor = "#e74c3c"; }
+                    const row = document.createElement('div');
+                    row.className = 'forecast-row';
+                    row.innerHTML = `<span class="f-time">${time}</span><span style="color:${tColor}">${desc} (${prob}mm)</span>`;
+                    fCont.appendChild(row);
                 }
-                else if (parkType === 'covered') {
-                    status = "DRY"; sub = "COVERED"; logic = "Spot is covered. Rain/Dew ignored.";
-                }
-
-                // 5. UPDATE DOM
-                const head = document.getElementById('status-header');
-                head.innerText = status; head.style.color = color;
-                document.getElementById('status-sub').innerText = sub;
-                document.getElementById('status-sub').style.color = color;
-                document.getElementById('main-card').style.borderColor = color;
-                document.getElementById('logic-box').innerHTML = logic;
-                document.getElementById('why-btn').style.display = "block";
-
-                // Badges
-                const typeBadge = document.getElementById('type-badge');
-                typeBadge.style.display = "block";
-                typeBadge.innerText = settings.desc;
-                typeBadge.className = "badge type-" + (parkType === 'field' ? 'field' : (parkType === 'covered' ? 'covered' : 'urban'));
-
-                const rainBadge = document.getElementById('rain-badge');
-                rainBadge.style.display = "block";
-                if (lastRainHours === 0) rainBadge.innerText = "Raining";
-                else if (lastRainHours === -1) rainBadge.innerText = "No Rain >24h";
-                else rainBadge.innerText = `Rain ${lastRainHours}h ago`;
-
-                const confBadge = document.getElementById('conf-badge');
-                if(confidence > 0) {
-                    confBadge.style.display = "block";
-                    confBadge.innerText = `${confidence}% Dry`;
-                    confBadge.className = "badge " + (confidence > 60 ? "conf-high" : (confidence > 30 ? "conf-med" : "conf-low"));
-                } else { confBadge.style.display = "none"; }
-
-                // Metrics
-                document.getElementById('data-card').classList.remove('dim');
-                document.getElementById('val-ground').innerText = groundTemp + "°";
-                document.getElementById('val-dew').innerText = dewPoint + "°";
-                document.getElementById('val-hum').innerText = humidity + "%";
-                document.getElementById('val-spread').innerText = spread + "°";
-
-                // Forecast
-                const fCont = document.getElementById('forecast-container');
-                fCont.innerHTML = "";
-                for(let i=1; i<=3; i++) {
-                    const fIdx = idx + i;
-                    if (fIdx < hourly.time.length) {
-                        const time = hourly.time[fIdx].split('T')[1];
-                        const code = hourly.weather_code[fIdx];
-                        const prob = hourly.precipitation[fIdx];
-                        let desc = "Cloudy"; let tColor = "#aaa";
-                        if(code < 3) desc = "Clear";
-                        if(code >= 50) { desc = "Rain"; tColor = "#e74c3c"; }
-                        const row = document.createElement('div');
-                        row.className = 'forecast-row';
-                        row.innerHTML = `<span class="f-time">${time}</span><span style="color:${tColor}">${desc} (${prob}mm)</span>`;
-                        fCont.appendChild(row);
-                    }
-                }
-            } catch (err) {
-                showError("Logic Error: " + err.message);
             }
         }
     </script>
